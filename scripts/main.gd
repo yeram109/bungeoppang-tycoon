@@ -169,7 +169,7 @@ func _ready() -> void:
 	leaderboard_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	column.add_child(leaderboard_panel)
 	var ranking_title := Label.new()
-	ranking_title.text = "기존 점수 TOP 10 (읽기 전용)"
+	ranking_title.text = "판매 금액 TOP 10 (원)"
 	leaderboard_panel.add_child(ranking_title)
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -181,7 +181,7 @@ func _ready() -> void:
 	scroll.add_child(leaderboard_rows)
 	save_label = Label.new()
 	save_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	save_label.text = "기존 랭킹을 읽지 못해 빈 목록으로 표시합니다. 파일은 변경하지 않습니다." if not ranking.load_message.is_empty() else ""
+	save_label.text = ranking.load_message
 	column.add_child(save_label)
 	action_button = Button.new()
 	action_button.text = "게임 시작"
@@ -350,7 +350,7 @@ func _render(now: int) -> void:
 	for index in mold_views.size():
 		var message: String = session.feedback[index] if now - session.feedback_at[index] < 1_200_000 else ""
 		mold_views[index].render(session.molds[index], index, display_time, session.running, message)
-	result_label.text = "%s 님 · 시간 종료!\n총 판매 금액 %d원" % [player_nickname, session.revenue] if ended else "60초 동안 굽고 수거해 3개 봉투를 드래그하여 판매하세요."
+	result_label.text = "%s 님 · 시간 종료!\n총 판매 금액 %d원 · 최고 판매 금액 %d원" % [player_nickname, session.revenue, ranking.best_score()] if ended else "60초 동안 굽고 수거해 3개 봉투를 드래그하여 판매하세요."
 	result_label.visible = not session.running
 	tool_row.visible = session.running
 	batter_button.set_pressed_no_signal(session.selected_tool == Session.Tool.BATTER)
@@ -384,10 +384,12 @@ func _render(now: int) -> void:
 func _finish_if_needed() -> void:
 	if not has_started or session.running or result_recorded:
 		return
-	# Currency rankings are deferred to G003; preserve legacy score records.
+	# Mark the attempt before writing: repeated end/frame/UI events cannot save twice.
 	_cancel_bag_drag()
 	result_recorded = true
-	save_label.text = "이번 수익은 랭킹에 저장하지 않습니다. 기존 기록은 유지됩니다."
+	var saved: bool = ranking.add_result(player_nickname, session.revenue, int(Time.get_unix_time_from_system() * 1000))
+	save_label.text = "기록 저장 완료" if saved else "기록 저장 실패: " + ranking.last_error
+	_refresh_rankings()
 
 func _show_start() -> void:
 	if session.running:
@@ -408,7 +410,7 @@ func _refresh_rankings() -> void:
 		var record: Dictionary = ranking.records[index]
 		var label := Label.new()
 		var played := Time.get_datetime_string_from_unix_time(int(record.played_at / 1000.0)).replace("T", " ")
-		label.text = "%2d.  %s  ·  %d점  ·  %s UTC" % [index + 1, record.nickname, record.score, played]
+		label.text = "%2d.  %s  ·  %d원  ·  %s UTC" % [index + 1, record.nickname, record.score, played]
 		label.add_theme_font_size_override("font_size", 16)
 		label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		leaderboard_rows.add_child(label)

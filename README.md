@@ -1,6 +1,6 @@
 # 붕어빵 장인
 
-짧은 게임 제작 이벤트를 위한 Windows 오프라인 2D 미니 타이쿤 프로젝트입니다. 현재 G002-B는 60초 동안 독립된 틀 6개를 도구로 조작합니다. F002 닉네임 입력을 유지하며 기존 점수 TOP 10은 읽기 전용으로 표시합니다. 붕어빵을 수거해 3개 봉투를 드래그 판매하며, 새 원화 랭킹 저장은 G003에서 연결합니다. 최종 디자인과 제출물 구성은 포함하지 않습니다.
+짧은 게임 제작 이벤트를 위한 Windows 오프라인 2D 미니 타이쿤 프로젝트입니다. 현재 G003-A는 60초 동안 독립된 틀 6개를 도구로 조작합니다. F002 닉네임 입력을 유지하며 판매 금액(원) TOP 10을 표시합니다. 붕어빵을 수거해 3개 봉투를 드래그 판매하며, 종료 시 최종 수익을 로컬에 저장합니다. 최종 디자인과 제출물 구성은 포함하지 않습니다.
 
 - 기획 기준: [Notion MVP 기획 v0.1](https://app.notion.com/p/41387148aa578117907afd28937e1b5f)
 - 엔진: **Godot 4.7.2 stable**, 일반 GDScript 에디터 (x86_64, Compatibility 렌더러)
@@ -37,11 +37,12 @@ $godot = '.\.tools\godot\Godot_v4.7.2-stable_win64_console.exe'
 & $godot --headless --path . --script res://tests/test_cooking_ui.gd
 & $godot --headless --path . --script res://tests/test_sales.gd
 & $godot --headless --path . --script res://tests/test_sales_ui.gd
+& $godot --headless --path . --script res://tests/test_currency_ranking.gd
 ```
 
 실패 시 종료 코드 1을 반환합니다. 테스트 스크립트는 Windows Export에서 제외합니다.
 
-닉네임은 앞뒤 공백을 제거한 1~12자입니다. 기존 `user://rankings.json`은 읽기만 하며 종료·다시 하기·손상 파일 로드 시에도 생성·수정·삭제하지 않습니다. 이번 버전의 판매 수익은 기존 점수 랭킹에 추가하지 않습니다.
+닉네임은 앞뒤 공백을 제거한 1~12자입니다. `user://rankings.json` 버전 2에 판매 금액(원)을 저장합니다(`score` 필드는 버전 2에서 원 단위). 버전 1 점수 기록은 최초 로드 시 빈 원화 랭킹으로 교체하며 이월하지 않습니다. 임시 파일 쓰기·검증 후 교체하므로 실패 시 기존 파일을 보존하고 실패를 안내합니다. 한 판 종료당 한 번만 저장하며, 0원과 동일 닉네임의 여러 판도 별도 기록입니다. 금액 내림차순, 동점은 플레이 시각·기록 순서로 정렬해 TOP 10을 유지합니다.
 
 Windows에서는 **입력·변경** 버튼으로 기본 입력창을 엽니다. 이 PC의 Godot 4.7.2 기본 LineEdit에서 재현된 한글 연속 조합 손실을 피하기 위해 엔진이 제공하는 Windows 네이티브 입력창을 사용합니다.
 
