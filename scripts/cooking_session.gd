@@ -1,6 +1,6 @@
 extends RefCounted
 ## Cooking, tools and deadline, with explicit collection/sale APIs for G002-B.
-## Existing click routing stays unchanged until the bag UI is connected.
+## Collection is routed by the UI; SIDE_1 flipping takes priority over tools.
 const Board = preload("res://scripts/cooking_board.gd")
 const Mold = preload("res://scripts/cooking_mold.gd")
 const Bag = preload("res://scripts/sales_bag.gd")
@@ -87,6 +87,12 @@ func click_mold(index: int, now: int) -> bool:
 	advance(now)
 	if not running or index < 0 or index >= MOLD_COUNT:
 		return false
+	# Advance above must run first: an expired first side is BURNT, not flippable.
+	if molds[index].state == Mold.State.SIDE_1:
+		var flipped: bool = board.flip(index, now)
+		feedback_at[index] = now
+		feedback[index] = "뒤집기 완료 · 선택 도구 유지" if flipped else "첫 면 5초부터 뒤집을 수 있습니다"
+		return flipped
 	var accepted := false
 	match selected_tool:
 		Tool.BATTER: accepted = board.add_batter(index, now)

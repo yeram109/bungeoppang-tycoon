@@ -15,6 +15,7 @@ func check(ok: bool, message: String) -> void:
 
 func run() -> void:
 	test_tools()
+	test_tool_flip()
 	test_deadline()
 	await test_ui()
 	print("G001-B TESTS: %d checks, %d failures" % [checks, failures])
@@ -50,9 +51,9 @@ func test_tools() -> void:
 		check(s.selected_tool == Session.Tool.NONE and s.molds[index].state == Mold.State.SIDE_1, "one use auto-clears and routes to independent mold")
 	check(not s.click_mold(0, 4_999_999), "early flip ignored")
 	s.select_tool(Session.Tool.BATTER, 5_000_000)
-	check(not s.click_mold(0, 5_000_000) and s.molds[0].state == Mold.State.SIDE_1, "held tool cannot fall through to flip")
+	check(s.click_mold(0, 5_000_000) and s.molds[0].state == Mold.State.SIDE_2 and s.selected_tool == Session.Tool.BATTER, "held tool flips first side and remains selected")
 	s.cancel_tool(5_000_000)
-	check(s.click_mold(0, 5_000_000) and s.molds[0].state == Mold.State.SIDE_2, "no-tool click flips")
+	check(not s.click_mold(0, 5_000_000) and s.molds[0].state == Mold.State.SIDE_2, "repeat click cannot flip second side")
 	s.advance(8_000_000)
 	check(s.molds[0].state == Mold.State.READY and s.molds[0].quality == Mold.Quality.DELICIOUS, "ready still in mold")
 	check(not s.click_mold(0, 8_000_000) and s.molds[0].state == Mold.State.READY, "ready click cannot collect")
@@ -62,6 +63,25 @@ func test_tools() -> void:
 	check(s.molds[0].state == Mold.State.BURNT, "ready becomes burnt")
 	check(not s.click_mold(0, 11_000_001) and s.molds[0].state == Mold.State.BURNT, "burnt cannot collect or auto clear")
 	check(not s.click_mold(-1, 11_000_001) and not s.click_mold(6, 11_000_001), "invalid indices safely rejected")
+
+func test_tool_flip() -> void:
+	for tool in [Session.Tool.NONE, Session.Tool.BATTER, Session.Tool.FILLING]:
+		for at in [4_999_999, 5_000_000, 7_000_001, 9_000_000, 9_000_001]:
+			var s = Session.new()
+			s.start(0)
+			recipe(s, 0, 0)
+			if tool != Session.Tool.NONE:
+				s.select_tool(tool, 3)
+			var expected: bool = at >= 5_000_000 and at <= 9_000_000
+			check(s.click_mold(0, at) == expected, "flip time boundary with each tool")
+			check(s.selected_tool == tool, "flip success/early/burnt retains tool")
+			check(s.molds[0].state == (Mold.State.SIDE_2 if expected else (Mold.State.BURNT if at > 9_000_000 else Mold.State.SIDE_1)), "flip keeps time rules")
+			check(s.bag.items.is_empty(), "flip or burnt tool input never collects")
+			if at < 5_000_000:
+				check(s.feedback[0].contains("5초"), "early click gives timing guidance with tool")
+			if expected:
+				check(s.feedback[0].contains("뒤집기 완료"), "flip feedback is not ingredient feedback")
+				check(not s.click_mold(0, at + 1) and s.selected_tool == tool, "second click cannot flip twice or consume tool")
 
 func test_deadline() -> void:
 	for offset in [-1, 0, 1]:
@@ -119,6 +139,16 @@ func test_ui() -> void:
 	right.pressed = true
 	main._input(right)
 	check(main.session.selected_tool == Session.Tool.NONE and not main.tool_cursor.visible, "actual right-click handler clears cursor")
+	for tool in [Session.Tool.NONE, Session.Tool.BATTER, Session.Tool.FILLING]:
+		var now := Time.get_ticks_usec()
+		main.session.start(now - 6_000_000)
+		recipe(main.session, 0, now - 6_000_000)
+		if tool != Session.Tool.NONE:
+			main.session.select_tool(tool, now)
+		main.mold_views[0].cook_button.pressed.emit()
+		check(main.session.molds[0].state == Mold.State.SIDE_2 and main.session.selected_tool == tool, "actual mold button flips and preserves tool")
+		check(main.tool_cursor.visible == (tool != Session.Tool.NONE), "actual tool cursor survives flip")
+		check(main.batter_button.button_pressed == (tool == Session.Tool.BATTER) and main.filling_button.button_pressed == (tool == Session.Tool.FILLING), "actual selected button survives flip")
 	# Render the real view using model state at every boundary, never rounded text.
 	var cases := [[4_999_999, "조리 중", Color("8c806b")], [5_000_000, "완벽", Color("b88428")], [5_000_001, "완벽", Color("b88428")], [6_999_999, "완벽", Color("b88428")], [7_000_000, "완벽", Color("b88428")], [7_000_001, "일반", Color("825135")], [8_999_999, "일반", Color("825135")], [9_000_000, "일반", Color("825135")], [9_000_001, "탐", Color("292523")]]
 	for side in [1, 2]:

@@ -64,7 +64,7 @@ func _ready() -> void:
 	revenue_label.add_theme_font_size_override("font_size", 20)
 	header.add_child(revenue_label)
 	var help := Label.new()
-	help.text = "주전자 반죽 → 주걱 팥 → 주전자 반죽 → 도구 없이 뒤집기\n첫 면 5~7초 완벽 / 9초 초과 탐 · 두 번째 면 3~4.5초 완벽 / 6초 초과 탐"
+	help.text = "주전자 반죽 → 주걱 팥 → 주전자 반죽 → 도구 보유 중에도 뒤집기\n첫 면 5~7초 완벽 / 9초 초과 탐 · 두 번째 면 3~4.5초 완벽 / 6초 초과 탐"
 	help.add_theme_font_size_override("font_size", 16)
 	column.add_child(help)
 	nickname_row = HBoxContainer.new()
@@ -359,7 +359,7 @@ func _render(now: int) -> void:
 	filling_button.set_pressed_no_signal(session.selected_tool == Session.Tool.FILLING)
 	batter_button.disabled = not session.running
 	filling_button.disabled = not session.running
-	tool_status.text = "도구 없음 · 뒤집기 / 수거" if session.selected_tool == Session.Tool.NONE else "같은 도구 / 우클릭으로 해제"
+	tool_status.text = "도구 없음 · 뒤집기 / 수거" if session.selected_tool == Session.Tool.NONE else "뒤집기 가능 · 수거는 도구 해제 후"
 	tool_cursor.text = "▰ 주전자 · 반죽" if session.selected_tool == Session.Tool.BATTER else "▱ 주걱 · 팥"
 	tool_cursor.visible = session.running and session.selected_tool != Session.Tool.NONE and not dragging
 	tool_cursor.position = (get_local_mouse_position() + Vector2(18, 18)).clamp(Vector2.ZERO, (size - tool_cursor.size).max(Vector2.ZERO))
