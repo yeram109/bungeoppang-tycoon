@@ -47,6 +47,7 @@ func test_nickname_cancel() -> void:
 	await process_frame
 	check(main.nickname_confirmation.visible and main.nickname_input.text.is_empty(), "draft does not change empty nickname")
 	main.action_button.pressed.emit()
+	complete_preparation(main)
 	check(not main.session.running, "cannot start while confirmation pending")
 	main.nickname_confirmation.canceled.emit()
 	check(main.nickname_input.text.is_empty() and not main.nickname_pending and not main.nickname_confirmation.visible, "cancel returns to empty start screen")
@@ -66,11 +67,13 @@ func test_nickname_cancel() -> void:
 		await process_frame
 		main.nickname_confirmation.confirmed.emit()
 		main.action_button.pressed.emit()
+		complete_preparation(main)
 		check(not main.session.running and not main.validation_label.text.is_empty(), "confirmed invalid draft still blocks start")
 	main._stage_nickname("겨울장인")
 	await process_frame
 	main.nickname_confirmation.confirmed.emit()
 	main.action_button.pressed.emit()
+	complete_preparation(main)
 	check(main.session.running and main.player_nickname == "겨울장인", "confirmed change becomes session name")
 	main._stage_nickname("늦은입력")
 	check(not main.nickname_pending and main.player_nickname == "겨울장인", "running session rejects late draft")
@@ -184,15 +187,19 @@ func test_ui() -> void:
 	check(main.nickname_input.text == "한글장인" and main.validation_label.text.is_empty(), "native dialog Korean callback trims without losing syllables")
 	main.nickname_input.text = ""
 	main.action_button.pressed.emit()
+	complete_preparation(main)
 	check(not main.session.running and not main.validation_label.text.is_empty(), "AC01 empty name blocked")
 	main.nickname_input.text = "   "
 	main.action_button.pressed.emit()
+	complete_preparation(main)
 	check(not main.session.running, "whitespace name blocked by UI")
 	main.nickname_input.text = "가나다라마바사아자차카타파"
 	main.action_button.pressed.emit()
+	complete_preparation(main)
 	check(not main.session.running, "long UI input rejected")
 	main.nickname_input.text = "  한글장인12  "
 	main.action_button.pressed.emit()
+	complete_preparation(main)
 	check(main.session.running and main.player_nickname == "한글장인12", "AC02 Korean name starts and trims")
 	main._accept_nickname("다른이름")
 	check(main.nickname_input.text == "한글장인12", "late dialog callback cannot change running session")
@@ -206,6 +213,7 @@ func test_ui() -> void:
 		main._on_mold_clicked(0)
 	check(main.ranking.records.size() == 1 and main.ranking.next_order == 1, "repeat finish/frame/input cannot duplicate record")
 	main.action_button.pressed.emit()
+	complete_preparation(main)
 	check(main.session.running and main.player_nickname == "한글장인12", "retry keeps nickname")
 	end_round(main)
 	main.back_button.pressed.emit()
@@ -224,10 +232,12 @@ func test_ui() -> void:
 	main.nickname_input.text = "한글장인"
 	for repeat in 3:
 		main.action_button.pressed.emit()
+		complete_preparation(main)
 		end_round(main)
 		main.back_button.pressed.emit()
 	check(FileAccess.get_file_as_string(path) != before and main.ranking.records.size() == 10 and main.ranking.next_order == 15, "multiple rounds save separately and retain top ten")
 	main.action_button.pressed.emit()
+	complete_preparation(main)
 	end_round(main)
 	await process_frame
 	check(main.get_global_rect().encloses(main.back_button.get_global_rect()), "result controls fit with ten long names")
@@ -240,9 +250,17 @@ func test_ui() -> void:
 	check(not main.save_label.text.is_empty(), "load failure still informs user")
 	main.nickname_input.text = "복구검사"
 	main.action_button.pressed.emit()
+	complete_preparation(main)
 	end_round(main)
 	check(JSON.parse_string(FileAccess.get_file_as_string(corrupt_path)).version == Store.VERSION and main.ranking.records.size() == 1, "completed round repairs corrupt file")
 	main.action_button.pressed.emit()
+	complete_preparation(main)
 	check(main.session.running, "load failure does not prevent retry")
 	main.queue_free()
 	await process_frame
+
+func complete_preparation(main) -> void:
+	if main.session.preparing:
+		main.session.advance(main.session.started_at)
+		main.session.started_at = Time.get_ticks_usec()
+		main._render(Time.get_ticks_usec())

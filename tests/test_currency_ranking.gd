@@ -63,12 +63,12 @@ func make_main(path: String):
 func sell(main) -> void:
 	# Prepare using actual cooking APIs, sell through the same UI drop path.
 	var now := Time.get_ticks_usec()
-	main.session.start(now - 9_000_000)
+	main.session.start(now - 14_000_000)
 	for index in 3:
-		main.session.board.add_batter(index, now - 8_000_000)
-		main.session.board.add_filling(index, now - 8_000_000)
-		main.session.board.add_batter(index, now - 8_000_000)
-		main.session.board.flip(index, now - 3_000_000)
+		main.session.board.add_batter(index, now - 13_000_000)
+		main.session.board.add_filling(index, now - 13_000_000)
+		main.session.board.add_batter(index, now - 13_000_000)
+		main.session.board.flip(index, now - 5_000_000)
 		main.click_mold_at(index, now)
 	main.begin_bag_drag(now)
 	main.drop_bag_at(main.sale_zone.get_global_rect().get_center(), now)
@@ -81,6 +81,7 @@ func test_ui() -> void:
 	var main = make_main(path)
 	check(main.ranking.records.is_empty() and main.save_label.text.contains("전환"), "UI migrates without legacy display")
 	main.action_button.pressed.emit()
+	complete_preparation(main)
 	await process_frame
 	sell(main)
 	check(main.session.revenue == 2000 and main.ranking.records.is_empty(), "sale revenue not saved before end")
@@ -102,9 +103,11 @@ func test_ui() -> void:
 	main = make_main(path)
 	check(main.ranking.records.size() == 1 and main.ranking.best_score() == 2000, "new scene restores exact sale")
 	main.action_button.pressed.emit()
+	complete_preparation(main)
 	finish(main)
 	check(main.ranking.records.size() == 2 and main.ranking.records[1].score == 0, "new session zero saves once")
 	main.action_button.pressed.emit()
+	complete_preparation(main)
 	check(main.session.revenue == 0 and not main.result_recorded, "retry resets revenue and save guard")
 	DirAccess.make_dir_absolute(path + ".tmp")
 	bytes = FileAccess.get_file_as_string(path)
@@ -116,7 +119,14 @@ func test_ui() -> void:
 	main._finish_if_needed()
 	check(FileAccess.get_file_as_string(path) == bytes, "failed round is not retried by UI refresh")
 	main.action_button.pressed.emit()
+	complete_preparation(main)
 	finish(main)
 	check(main.save_label.text == "기록 저장 완료" and main.ranking.next_order == 3, "next round can save after failure")
 	main.queue_free()
 	await process_frame
+
+func complete_preparation(main) -> void:
+	if main.session.preparing:
+		main.session.advance(main.session.started_at)
+		main.session.started_at = Time.get_ticks_usec()
+		main._render(Time.get_ticks_usec())

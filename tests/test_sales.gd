@@ -34,7 +34,7 @@ func batch(s, start: int, count: int = 6) -> void:
 	for index in count:
 		s.board.add_batter(index, start + 2)
 	for index in count:
-		s.board.flip(index, start + 5_000_000)
+		s.board.flip(index, start + 8_000_000)
 
 func mold_snapshot(mold) -> Array:
 	return [mold.state, mold.side_started_at, mold.first_quality, mold.second_quality, mold.quality]
@@ -81,7 +81,7 @@ func test_bag() -> void:
 	check(result.sold and result.amount == 2000 and bag.items.is_empty(), "new bag sells normally")
 
 func test_collection() -> void:
-	for sample in [[7_999_999, false, Q.NONE], [8_000_000, true, Q.DELICIOUS], [9_500_000, true, Q.DELICIOUS], [9_500_001, true, Q.NORMAL], [11_000_000, true, Q.NORMAL], [11_000_001, true, Q.BURNT]]:
+	for sample in [[10_999_999, false, Q.NONE], [11_000_000, true, Q.NORMAL], [12_500_000, true, Q.NORMAL], [12_500_001, true, Q.DELICIOUS], [14_000_000, true, Q.DELICIOUS], [14_000_001, true, Q.BURNT]]:
 		var s = Session.new()
 		s.start(0)
 		batch(s, 0)
@@ -102,10 +102,10 @@ func test_collection() -> void:
 	var mixed = Session.new()
 	mixed.start(0)
 	batch(mixed, 0)
-	mixed.collect(0, 8_000_000)
-	mixed.collect(1, 9_500_001)
-	mixed.collect(2, 11_000_001)
-	check(mixed.bag.items == [Q.DELICIOUS, Q.NORMAL, Q.BURNT] and mixed.revenue == 0, "mixed qualities retained without collection revenue")
+	mixed.collect(0, 11_000_000)
+	mixed.collect(1, 12_500_001)
+	mixed.collect(2, 14_000_001)
+	check(mixed.bag.items == [Q.NORMAL, Q.DELICIOUS, Q.BURNT] and mixed.revenue == 0, "mixed qualities retained without collection revenue")
 	check(mixed.molds[3].state == Mold.State.BURNT, "other molds continue cooking independently")
 
 func test_failures() -> void:
@@ -113,23 +113,23 @@ func test_failures() -> void:
 	check(not s.collect(0, 0) and not s.sell_bag(s.bag.id, 0).sold, "pre-start collection and sale blocked")
 	s.start(0)
 	batch(s, 0)
-	s.advance(8_000_000)
+	s.advance(13_000_000)
 	for index in [-1, 6, 99]:
-		check(not s.collect(index, 8_000_000) and s.bag.items.is_empty(), "invalid mold index rejected")
+		check(not s.collect(index, 13_000_000) and s.bag.items.is_empty(), "invalid mold index rejected")
 	var before := mold_snapshot(s.molds[0])
-	s.select_tool(Session.Tool.BATTER, 8_000_000)
-	check(s.collect(0, 8_000_000) and s.selected_tool == Session.Tool.BATTER, "held tool permits collection and stays selected")
+	s.select_tool(Session.Tool.BATTER, 13_000_000)
+	check(s.collect(0, 13_000_000) and s.selected_tool == Session.Tool.BATTER, "held tool permits collection and stays selected")
 	check(s.molds[0].state == Mold.State.EMPTY and s.bag.items == [Q.DELICIOUS], "held-tool success transfers once")
 	for index in range(1, 3):
-		check(s.collect(index, 8_000_000), "collect until capacity")
+		check(s.collect(index, 13_000_000), "collect until capacity")
 	var id: int = s.bag.id
 	var items: Array = s.bag.items
 	before = mold_snapshot(s.molds[3])
 	var original = s.molds[3]
-	check(not s.collect(3, 8_000_000), "full bag refuses fourth bread")
+	check(not s.collect(3, 13_000_000), "full bag refuses fourth bread")
 	check(s.selected_tool == Session.Tool.BATTER, "direct collection keeps tool on full-bag failure")
 	check(s.molds[3] == original and mold_snapshot(s.molds[3]) == before and s.bag.items == items and s.bag.id == id, "failed transfer changes neither container")
-	check(not s.collect(3, 11_000_001) and s.molds[3].state == Mold.State.BURNT, "full bag still refreshes cooking time")
+	check(not s.collect(3, 14_000_001) and s.molds[3].state == Mold.State.BURNT, "full bag still refreshes cooking time")
 	check(s.bag.items == items and s.molds[3] == original, "time update does not consume blocked bread")
 	for count in [0, 1, 2]:
 		var unfinished = Session.new()
@@ -144,38 +144,38 @@ func test_sales() -> void:
 	s.start(0)
 	batch(s, 0)
 	for index in 3:
-		s.collect(index, 8_000_000)
+		s.collect(index, 13_000_000)
 	var old_id: int = s.bag.id
-	var result: Dictionary = s.sell_bag(old_id, 8_000_000)
+	var result: Dictionary = s.sell_bag(old_id, 13_000_000)
 	check(result.sold and result.amount == 2000 and s.revenue == 2000 and s.bag.items.is_empty(), "successful sale credits once and empties bag")
-	check(not s.sell_bag(old_id, 8_000_000).sold and s.revenue == 2000, "duplicate sale does not credit twice")
+	check(not s.sell_bag(old_id, 13_000_000).sold and s.revenue == 2000, "duplicate sale does not credit twice")
 	for index in range(3, 6):
-		s.collect(index, 11_000_001)
-	check(not s.sell_bag(old_id, 11_000_001).sold and s.bag.items.size() == 3 and s.revenue == 2000, "stale sale cannot consume another set")
-	result = s.sell_bag(s.bag.id, 11_000_001)
+		s.collect(index, 14_000_001)
+	check(not s.sell_bag(old_id, 14_000_001).sold and s.bag.items.size() == 3 and s.revenue == 2000, "stale sale cannot consume another set")
+	result = s.sell_bag(s.bag.id, 14_000_001)
 	check(result.sold and result.amount == 0 and s.revenue == 2000 and s.bag.items.is_empty(), "zero sale accepted without changing prior earnings")
-	batch(s, 12_000_000, 3)
+	batch(s, 16_000_000, 3)
 	for index in 3:
-		s.collect(index, 21_500_001)
-	result = s.sell_bag(s.bag.id, 21_500_001)
+		s.collect(index, 27_000_000)
+	result = s.sell_bag(s.bag.id, 27_000_000)
 	check(result.sold and result.amount == 1000 and s.revenue == 3000, "multiple successful sets accumulate earnings")
 	var previous: int = s.bag.id
 	s.start(30_000_000)
 	batch(s, 30_000_000, 3)
 	for index in 3:
-		s.collect(index, 38_000_000)
-	check(s.revenue == 0 and not s.sell_bag(previous, 38_000_000).sold and s.bag.items.size() == 3, "retry clears earnings and invalidates old bag token")
+		s.collect(index, 43_000_000)
+	check(s.revenue == 0 and not s.sell_bag(previous, 43_000_000).sold and s.bag.items.size() == 3, "retry clears earnings and invalidates old bag token")
 
 func test_deadlines() -> void:
 	for count in range(4):
 		for offset in [-1, 0, 1]:
 			var s = Session.new()
 			s.start(0)
-			batch(s, 51_000_000)
+			batch(s, 77_000_000)
 			for index in count:
-				s.collect(index, 59_000_000)
+				s.collect(index, 88_000_000)
 			var id: int = s.bag.id
-			var accepted: bool = s.collect(5, 60_000_000 + offset)
+			var accepted: bool = s.collect(5, 90_000_000 + offset)
 			check(accepted == (offset < 0 and count < 3), "collection at deadline / capacity boundary")
 			check(s.bag.items.size() == (mini(count + 1, 3) if offset < 0 else 0), "deadline drops partial and full unsold bags")
 			if offset >= 0:
@@ -186,11 +186,11 @@ func test_deadlines() -> void:
 			sale.start(0)
 			batch(sale, 0)
 			for index in count:
-				sale.collect(index, 8_000_000)
-			var result: Dictionary = sale.sell_bag(sale.bag.id, 60_000_000 + offset)
+				sale.collect(index, 13_000_000)
+			var result: Dictionary = sale.sell_bag(sale.bag.id, 90_000_000 + offset)
 			check(result.sold == (offset < 0 and count == 3), "only full bag strictly before deadline sells")
 			check(sale.revenue == (2000 if offset < 0 and count == 3 else 0), "exact/late sale cannot earn")
-			sale.advance(60_000_001)
+			sale.advance(90_000_001)
 			var earned: int = sale.revenue
-			check(not sale.sell_bag(sale.bag.id, 60_000_002).sold and not sale.collect(0, 60_000_002), "post-end sale and collection blocked")
+			check(not sale.sell_bag(sale.bag.id, 90_000_002).sold and not sale.collect(0, 90_000_002), "post-end sale and collection blocked")
 			check(sale.revenue == earned and sale.bag.items.is_empty(), "end preserves earned revenue only")

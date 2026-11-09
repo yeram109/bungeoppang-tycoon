@@ -132,16 +132,18 @@ func test_scene() -> void:
 	for view in main.mold_views:
 		check(view.cook_button.disabled, "UI blocks pre-start input")
 	main.action_button.pressed.emit()
+	complete_preparation(main)
 	check(main.session.running and not main.action_button.visible, "start signal wired")
 	main.batter_button.pressed.emit()
 	main.mold_views[1].cook_button.pressed.emit()
 	check(main.session.molds[1].state == preload("res://scripts/cooking_mold.gd").State.FIRST_BATTER, "mold signal routes correct index")
-	main.session.started_at = Time.get_ticks_usec() - Session.DURATION_USEC
+	main.session.started_at = Time.get_ticks_usec() - main.Session.DURATION_USEC
 	main._process(0.0)
 	check(main.result_label.text.contains("시간 종료!") and main.action_button.visible, "result screen appears at deadline")
 	for view in main.mold_views:
 		check(view.cook_button.disabled, "UI blocks post-end input")
 	main.action_button.pressed.emit()
+	complete_preparation(main)
 	check(main.session.running and main.session.molds[1].state == Mold.State.EMPTY, "restart signal resets state")
 	await process_frame
 	for view in main.mold_views:
@@ -202,17 +204,17 @@ func test_display_boundaries() -> void:
 	view.queue_free()
 	view = main.mold_views[0]
 	# Includes the exact deadline and both adjacent microseconds, plus tenths.
-	for sample in [[0, "60.0", true], [1, "60.0", true],
-		[59_899_999, "00.2", true], [59_900_000, "00.1", true],
-		[59_900_001, "00.1", true], [59_999_999, "00.1", true],
-		[60_000_000, "00.0", false], [60_000_001, "00.0", false]]:
+	for sample in [[0, "90.0", true], [1, "90.0", true],
+		[89_899_999, "00.2", true], [89_900_000, "00.1", true],
+		[89_900_001, "00.1", true], [89_999_999, "00.1", true],
+		[90_000_000, "00.0", false], [90_000_001, "00.0", false]]:
 		main.session.start(0)
 		main.session.advance(sample[0])
 		main._render(sample[0])
 		check(main.status_label.text == "남은 시간 %s초" % sample[1], "actual countdown label at %d" % sample[0])
 		check(main.session.running == sample[2] and view.cook_button.disabled == not sample[2], "display and input availability agree at deadline")
 		check(main.result_label.text.contains("시간 종료!") == not sample[2], "result visibility agrees with countdown")
-		if sample[0] >= 59_899_999:
+		if sample[0] >= 89_899_999:
 			main.session.select_tool(main.Session.Tool.BATTER, sample[0])
 			check(main.session.click_mold(0, sample[0]) == sample[2], "countdown does not change ingredient/deadline judgment")
 	main.queue_free()
@@ -222,3 +224,9 @@ func _isolated_ranking_path() -> String:
 	var directory := "res://.tools/test-data/core-%d-%d" % [OS.get_process_id(), Time.get_ticks_usec()]
 	DirAccess.make_dir_recursive_absolute(directory)
 	return directory.path_join("rankings.json")
+
+func complete_preparation(main) -> void:
+	if main.session.preparing:
+		main.session.advance(main.session.started_at)
+		main.session.started_at = Time.get_ticks_usec()
+		main._render(Time.get_ticks_usec())
