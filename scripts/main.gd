@@ -68,7 +68,9 @@ func _on_mold_clicked(index: int) -> void:
 	_render(now)
 
 func _render(now: int) -> void:
-	var remaining: float = session.remaining_usec(now) / 1_000_000.0 if has_started else 60.0
+	# Display only: a positive remainder must never round down to 00.0.
+	var remaining_usec: int = session.remaining_usec(now) if has_started else Session.DURATION_USEC
+	var remaining: float = ceili(remaining_usec / 100_000.0) / 10.0
 	status_label.text = "남은 시간 %04.1f초    |    점수 %d점" % [remaining, session.score]
 	var ended: bool = has_started and not session.running
 	var display_time: int = mini(now, session.started_at + Session.DURATION_USEC) if ended else now

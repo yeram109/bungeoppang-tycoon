@@ -21,6 +21,8 @@ func run() -> void:
 	test_independence()
 	test_deadline()
 	await test_scene()
+	print("EXISTING CORE TESTS: %d checks, %d failures" % [checks, failures])
+	await test_display_boundaries()
 	print("CORE TESTS: %d checks, %d failures" % [checks, failures])
 	quit(1 if failures else 0)
 
@@ -141,5 +143,72 @@ func test_scene() -> void:
 	await process_frame
 	for view in main.mold_views:
 		check(main.get_global_rect().encloses(view.get_global_rect()), "mold fits viewport")
+	main.queue_free()
+	await process_frame
+
+func test_display_boundaries() -> void:
+	# Exercise the real scene's render methods and resulting controls, not a
+	# duplicate formatter. Disable frame updates so injected microseconds stay exact.
+	var main = load("res://scenes/main.tscn").instantiate()
+	root.add_child(main)
+	main.set_process(false)
+	main.has_started = true
+	var view = main.mold_views[0]
+	var samples := [
+		[2_999_999, "조리 중", 0, Color("8c806b")],
+		[3_000_000, "완벽", 100, Color("b88428")],
+		[3_000_001, "완벽", 100, Color("b88428")],
+		[4_499_999, "완벽", 100, Color("b88428")],
+		[4_500_000, "완벽", 100, Color("b88428")],
+		[4_500_001, "일반", 60, Color("825135")],
+		[5_999_999, "일반", 60, Color("825135")],
+		[6_000_000, "일반", 60, Color("825135")],
+		[6_000_001, "탐", 0, Color("292523")],
+	]
+	for side in [1, 2]:
+		for sample in samples:
+			main.session.start(0)
+			main.session.click_mold(0, 0)
+			var side_start := 0
+			if side == 2:
+				side_start = 3_000_000
+				main.session.click_mold(0, side_start)
+			var now: int = side_start + sample[0]
+			main.session.advance(now)
+			main._render(now)
+			var mold = main.session.molds[0]
+			var burnt: bool = sample[1] == "탐"
+			var action: String = "뒤집기" if side == 1 else "판매"
+			if sample[1] == "조리 중":
+				action = "3초부터 클릭"
+			var expected: String = "빈 틀\n반죽 투입" if burnt else "%d면 · %s\n%s" % [side, sample[1], action]
+			check(view.cook_button.text == expected, "actual UI state/action at %d on side %d" % [sample[0], side])
+			check(view.button_style.bg_color == sample[3], "boundary color retained")
+			check(is_equal_approx(view.progress.value, 0.0 if burnt else sample[0] / 1_000_000.0), "gauge retains actual elapsed time")
+			check(view.feedback_label.text == mold.feedback and (not burnt or mold.feedback.begins_with("탐")), "feedback retained including automatic discard")
+			var points: int = main.session.click_mold(0, now)
+			check(points == (sample[2] if side == 2 else 0), "click score agrees with displayed quality")
+			if not burnt:
+				var expected_state: int = side if sample[1] == "조리 중" else (Mold.State.SIDE_2 if side == 1 else Mold.State.EMPTY)
+				check(mold.state == expected_state, "early input/flip/sale agrees with UI")
+			else:
+				check(main.session.score == 0, "discard remains zero points")
+	# Includes the exact deadline and both adjacent microseconds, plus tenths.
+	for sample in [[0, "60.0", true], [1, "60.0", true],
+		[59_899_999, "00.2", true], [59_900_000, "00.1", true],
+		[59_900_001, "00.1", true], [59_999_999, "00.1", true],
+		[60_000_000, "00.0", false], [60_000_001, "00.0", false]]:
+		main.session.start(0)
+		# A sale is ready just before the deadline; rendering must not affect it.
+		if sample[0] >= 59_899_999:
+			main.session.click_mold(0, 53_000_000)
+			main.session.click_mold(0, 56_000_000)
+		main.session.advance(sample[0])
+		main._render(sample[0])
+		check(main.status_label.text == "남은 시간 %s초    |    점수 0점" % sample[1], "actual countdown label at %d" % sample[0])
+		check(main.session.running == sample[2] and view.cook_button.disabled == not sample[2], "display and input availability agree at deadline")
+		check(main.result_label.text.contains("시간 종료!") == not sample[2], "result visibility agrees with countdown")
+		if sample[0] >= 59_899_999:
+			check(main.session.click_mold(0, sample[0]) == (100 if sample[2] else 0), "countdown does not change sale/deadline judgment")
 	main.queue_free()
 	await process_frame

@@ -51,6 +51,12 @@ func render(mold: RefCounted, index: int, now: int, active: bool) -> void:
 		var quality_text: String = ["조리 중", "완벽", "일반", "탐"][quality]
 		color = [Color("8c806b"), Color("b88428"), Color("825135"), Color("292523")][quality]
 		var action := "뒤집기" if mold.state == Mold.State.SIDE_1 else "판매"
-		cook_button.text = "%d면 · %s\n%.1f초 / %s" % [mold.state, quality_text, elapsed / 1_000_000.0, action]
+		# Rounded elapsed seconds can contradict the exact quality at a boundary.
+		# Show the actual quality and action; the gauge still conveys progress.
+		if quality == Mold.Quality.COOKING:
+			action = "3초부터 클릭"
+		elif quality == Mold.Quality.BURNT:
+			action = "자동 폐기"
+		cook_button.text = "%d면 · %s\n%s" % [mold.state, quality_text, action]
 	if button_style.bg_color != color:
 		button_style.bg_color = color
