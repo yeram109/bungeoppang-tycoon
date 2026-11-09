@@ -152,4 +152,3 @@ func run() -> void:
 	await process_frame
 	print("G002-B TESTS: %d checks, %d failures" % [checks, failures])
 	quit(1 if failures else 0)
-
