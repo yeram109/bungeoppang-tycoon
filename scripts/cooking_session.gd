@@ -1,11 +1,15 @@
 extends RefCounted
-## G001-B input routing and deadline. No collection, sales or persistence.
+## Cooking, tools and deadline, with explicit collection/sale APIs for G002-B.
+## Existing click routing stays unchanged until the bag UI is connected.
 const Board = preload("res://scripts/cooking_board.gd")
 const Mold = preload("res://scripts/cooking_mold.gd")
+const Bag = preload("res://scripts/sales_bag.gd")
 const DURATION_USEC := 60_000_000
 const MOLD_COUNT := Board.MOLD_COUNT
 enum Tool { NONE, BATTER, FILLING }
 var board = Board.new()
+var bag = Bag.new()
+var revenue := 0
 var molds: Array:
 	get: return board.molds
 var running := false
@@ -19,12 +23,14 @@ func _init() -> void:
 
 func _clear() -> void:
 	board.reset()
+	bag.reset()
 	selected_tool = Tool.NONE
 	feedback.assign(["", "", "", "", "", ""])
 	feedback_at.assign([0, 0, 0, 0, 0, 0])
 
 func start(now: int) -> void:
 	_clear()
+	revenue = 0
 	started_at = now
 	running = true
 
@@ -50,6 +56,32 @@ func cancel_tool(now: int) -> void:
 	advance(now)
 	if running:
 		selected_tool = Tool.NONE
+
+func collect(index: int, now: int) -> bool:
+	# Time/expiry can change food quality even if collection is rejected.
+	advance(now)
+	if not running or selected_tool != Tool.NONE or index < 0 or index >= MOLD_COUNT:
+		return false
+	var mold = molds[index]
+	if mold.state not in [Mold.State.READY, Mold.State.BURNT]:
+		return false
+	if not bag.try_add(mold.quality):
+		return false
+	# Consume only after the bag accepted the immutable quality value.
+	board.molds[index] = Mold.new()
+	feedback[index] = ""
+	feedback_at[index] = 0
+	return true
+
+func sell_bag(expected_bag_id: int, now: int) -> Dictionary:
+	# G002-B should call only for a valid sale-zone drop, with its captured ID.
+	advance(now)
+	if not running:
+		return {"sold": false, "amount": 0}
+	var result: Dictionary = bag.sell(expected_bag_id)
+	if result.sold:
+		revenue += result.amount
+	return result
 
 func click_mold(index: int, now: int) -> bool:
 	advance(now)
