@@ -118,16 +118,16 @@ func test_failures() -> void:
 		check(not s.collect(index, 8_000_000) and s.bag.items.is_empty(), "invalid mold index rejected")
 	var before := mold_snapshot(s.molds[0])
 	s.select_tool(Session.Tool.BATTER, 8_000_000)
-	check(not s.collect(0, 8_000_000) and s.selected_tool == Session.Tool.BATTER, "held tool prevents collection and stays selected")
-	check(mold_snapshot(s.molds[0]) == before and s.bag.items.is_empty(), "held-tool failure preserves mold and bag")
-	s.cancel_tool(8_000_000)
-	for index in 3:
+	check(s.collect(0, 8_000_000) and s.selected_tool == Session.Tool.BATTER, "held tool permits collection and stays selected")
+	check(s.molds[0].state == Mold.State.EMPTY and s.bag.items == [Q.DELICIOUS], "held-tool success transfers once")
+	for index in range(1, 3):
 		check(s.collect(index, 8_000_000), "collect until capacity")
 	var id: int = s.bag.id
 	var items: Array = s.bag.items
 	before = mold_snapshot(s.molds[3])
 	var original = s.molds[3]
 	check(not s.collect(3, 8_000_000), "full bag refuses fourth bread")
+	check(s.selected_tool == Session.Tool.BATTER, "direct collection keeps tool on full-bag failure")
 	check(s.molds[3] == original and mold_snapshot(s.molds[3]) == before and s.bag.items == items and s.bag.id == id, "failed transfer changes neither container")
 	check(not s.collect(3, 11_000_001) and s.molds[3].state == Mold.State.BURNT, "full bag still refreshes cooking time")
 	check(s.bag.items == items and s.molds[3] == original, "time update does not consume blocked bread")
