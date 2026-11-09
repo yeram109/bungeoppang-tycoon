@@ -1,6 +1,6 @@
 extends Control
-const Session = preload("res://scripts/game_session.gd")
-const MoldScene = preload("res://scenes/mold.tscn")
+const Session = preload("res://scripts/cooking_session.gd")
+const MoldScene = preload("res://scenes/cooking_mold.tscn")
 const RankingStore = preload("res://scripts/ranking_store.gd")
 var ranking_path := "user://rankings.json"
 var ranking: RefCounted
@@ -14,7 +14,12 @@ var nickname_pending := false
 var validation_label: Label
 var save_label: Label
 var back_button: Button
-var mold_row: HBoxContainer
+var mold_row: GridContainer
+var tool_row: HBoxContainer
+var batter_button: Button
+var filling_button: Button
+var tool_status: Label
+var tool_cursor: Label
 var leaderboard_panel: VBoxContainer
 var leaderboard_rows: VBoxContainer
 var session = Session.new()
@@ -46,7 +51,7 @@ func _ready() -> void:
 	status_label.add_theme_font_size_override("font_size", 22)
 	header.add_child(status_label)
 	var help := Label.new()
-	help.text = "틀 클릭: 투입 → 뒤집기 → 판매  |  양면 완벽 100점 · 그 외 판매 60점\n면마다 3~4.5초 완벽 · 4.5초 초과~6초 일반 · 6초 초과 자동 폐기"
+	help.text = "주전자 반죽 → 주걱 팥 → 주전자 반죽 → 도구 없이 뒤집기\n첫 면 5~7초 완벽 / 9초 초과 탐 · 두 번째 면 3~4.5초 완벽 / 6초 초과 탐"
 	help.add_theme_font_size_override("font_size", 16)
 	column.add_child(help)
 	nickname_row = HBoxContainer.new()
@@ -79,9 +84,34 @@ func _ready() -> void:
 	nickname_confirmation.confirmed.connect(_confirm_nickname)
 	nickname_confirmation.canceled.connect(_cancel_nickname)
 	add_child(nickname_confirmation)
-	var row := HBoxContainer.new()
+	tool_row = HBoxContainer.new()
+	column.add_child(tool_row)
+	batter_button = Button.new()
+	batter_button.text = "▰ 양은주전자 · 반죽"
+	filling_button = Button.new()
+	filling_button.text = "▱ 주걱 · 팥"
+	for button in [batter_button, filling_button]:
+		button.toggle_mode = true
+		button.focus_mode = Control.FOCUS_NONE
+		button.custom_minimum_size.y = 36
+		tool_row.add_child(button)
+	batter_button.pressed.connect(_on_tool_pressed.bind(Session.Tool.BATTER))
+	filling_button.pressed.connect(_on_tool_pressed.bind(Session.Tool.FILLING))
+	tool_status = Label.new()
+	tool_status.add_theme_font_size_override("font_size", 14)
+	tool_row.add_child(tool_status)
+	tool_cursor = Label.new()
+	tool_cursor.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tool_cursor.z_index = 100
+	tool_cursor.add_theme_color_override("font_color", Color("ffe2a5"))
+	tool_cursor.add_theme_color_override("font_outline_color", Color.BLACK)
+	tool_cursor.add_theme_constant_override("outline_size", 6)
+	add_child(tool_cursor)
+	var row := GridContainer.new()
+	row.columns = 3
 	mold_row = row
-	row.add_theme_constant_override("separation", 18)
+	row.add_theme_constant_override("h_separation", 12)
+	row.add_theme_constant_override("v_separation", 8)
 	column.add_child(row)
 	for index in Session.MOLD_COUNT:
 		var view = MoldScene.instantiate()
@@ -95,7 +125,7 @@ func _ready() -> void:
 	leaderboard_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	column.add_child(leaderboard_panel)
 	var ranking_title := Label.new()
-	ranking_title.text = "이 PC TOP 10 · 동점은 먼저 달성한 기록 우선"
+	ranking_title.text = "기존 점수 TOP 10 (읽기 전용)"
 	leaderboard_panel.add_child(ranking_title)
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -107,7 +137,7 @@ func _ready() -> void:
 	scroll.add_child(leaderboard_rows)
 	save_label = Label.new()
 	save_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	save_label.text = ranking.load_message
+	save_label.text = "기존 랭킹을 읽지 못해 빈 목록으로 표시합니다. 파일은 변경하지 않습니다." if not ranking.load_message.is_empty() else ""
 	column.add_child(save_label)
 	action_button = Button.new()
 	action_button.text = "게임 시작"
@@ -193,17 +223,41 @@ func _on_mold_clicked(index: int) -> void:
 	_finish_if_needed()
 	_render(now)
 
+func _on_tool_pressed(tool: Session.Tool) -> void:
+	var now := Time.get_ticks_usec()
+	session.select_tool(tool, now)
+	_finish_if_needed()
+	_render(now)
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
+		var now := Time.get_ticks_usec()
+		session.cancel_tool(now)
+		_finish_if_needed()
+		_render(now)
+
 func _render(now: int) -> void:
 	# Display only: a positive remainder must never round down to 00.0.
 	var remaining_usec: int = session.remaining_usec(now) if has_started else Session.DURATION_USEC
 	var remaining: float = ceili(remaining_usec / 100_000.0) / 10.0
-	status_label.text = "남은 시간 %04.1f초    |    점수 %d점" % [remaining, session.score]
+	status_label.text = "남은 시간 %04.1f초" % remaining
 	status_label.visible = has_started
 	var ended: bool = has_started and not session.running
 	var display_time: int = mini(now, session.started_at + Session.DURATION_USEC) if ended else now
 	for index in mold_views.size():
-		mold_views[index].render(session.molds[index], index, display_time, session.running)
-	result_label.text = "%s 님\n시간 종료! 최종 점수 %d점 · 이 PC 최고 점수 %d점" % [player_nickname, session.score, maxi(session.score, ranking.best_score())] if ended else "60초 동안 세 틀을 동시에 관리하세요."
+		var message: String = session.feedback[index] if now - session.feedback_at[index] < 1_200_000 else ""
+		mold_views[index].render(session.molds[index], index, display_time, session.running, message)
+	result_label.text = "%s 님 · 시간 종료!\n조리 연습 완료 · 판매 및 기록 저장은 지원하지 않습니다." % player_nickname if ended else "60초 조리 연습 · 수거·판매 없이 굽기만 진행합니다."
+	result_label.visible = not session.running
+	tool_row.visible = session.running
+	batter_button.set_pressed_no_signal(session.selected_tool == Session.Tool.BATTER)
+	filling_button.set_pressed_no_signal(session.selected_tool == Session.Tool.FILLING)
+	batter_button.disabled = not session.running
+	filling_button.disabled = not session.running
+	tool_status.text = "도구 없음 · 뒤집기 가능" if session.selected_tool == Session.Tool.NONE else "같은 도구 / 우클릭으로 해제"
+	tool_cursor.text = "▰ 주전자 · 반죽" if session.selected_tool == Session.Tool.BATTER else "▱ 주걱 · 팥"
+	tool_cursor.visible = session.running and session.selected_tool != Session.Tool.NONE
+	tool_cursor.position = (get_local_mouse_position() + Vector2(18, 18)).clamp(Vector2.ZERO, (size - tool_cursor.size).max(Vector2.ZERO))
 	action_button.visible = not session.running
 	action_button.text = "다시 하기" if ended else "게임 시작"
 	nickname_row.visible = not has_started
@@ -216,12 +270,9 @@ func _render(now: int) -> void:
 func _finish_if_needed() -> void:
 	if not has_started or session.running or result_recorded:
 		return
-	# Set before I/O: repeated frames, input and result re-entry cannot retry or duplicate.
+	# G001-B has no sales. Never append a zero score or rewrite legacy rankings.
 	result_recorded = true
-	var saved: bool = ranking.add_result(player_nickname, session.score, int(Time.get_unix_time_from_system() * 1000))
-	save_label.text = "기록 저장 완료 · TOP 10만 보관합니다." if saved else "저장 실패 · 이번 기록은 저장되지 않았습니다.\n" + ranking.last_error
-	save_label.modulate = Color.WHITE if saved else Color("ffb4a0")
-	_refresh_rankings()
+	save_label.text = "이번 연습은 랭킹에 저장하지 않습니다. 기존 기록은 유지됩니다."
 
 func _show_start() -> void:
 	if session.running:
