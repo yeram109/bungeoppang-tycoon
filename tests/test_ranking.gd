@@ -75,7 +75,7 @@ func test_nickname_cancel() -> void:
 	main._stage_nickname("늦은입력")
 	check(not main.nickname_pending and main.player_nickname == "겨울장인", "running session rejects late draft")
 	end_round(main)
-	check(main.result_label.text.contains("겨울장인") and not FileAccess.file_exists(main.ranking_path), "confirmed name reaches result without creating legacy record")
+	check(main.result_label.text.contains("겨울장인") and main.ranking.records[0].nickname == "겨울장인", "confirmed name reaches saved currency record")
 	main.queue_free()
 	await process_frame
 
@@ -106,18 +106,18 @@ func test_ranking() -> void:
 	check(not FileAccess.file_exists(path + ".tmp"), "successful replace consumes staging file")
 
 func test_corruption() -> void:
-	var invalid := ["not json", "", "null", "[]", "{}", '{"version":2,"records":[],"next_order":0}']
+	var invalid := ["not json", "", "null", "[]", "{}", '{"version":3,"records":[],"next_order":0}']
 	var valid_record := {"nickname": "정상", "score": 60, "played_at": 1000, "order": 0}
 	for field in ["nickname", "score", "played_at", "order"]:
 		var record := valid_record.duplicate()
 		record[field] = null
-		invalid.append(JSON.stringify({"version": 1, "next_order": 1, "records": [record]}))
+		invalid.append(JSON.stringify({"version": Store.VERSION, "next_order": 1, "records": [record]}))
 	for score in [-1, 0.5, "100"]:
 		var record := valid_record.duplicate()
 		record.score = score
-		invalid.append(JSON.stringify({"version": 1, "next_order": 1, "records": [record]}))
-	invalid.append(JSON.stringify({"version": 1, "next_order": 0, "records": [valid_record]}))
-	invalid.append(JSON.stringify({"version": 1, "next_order": 1, "records": [valid_record, valid_record]}))
+		invalid.append(JSON.stringify({"version": Store.VERSION, "next_order": 1, "records": [record]}))
+	invalid.append(JSON.stringify({"version": Store.VERSION, "next_order": 0, "records": [valid_record]}))
+	invalid.append(JSON.stringify({"version": Store.VERSION, "next_order": 1, "records": [valid_record, valid_record]}))
 	for index in invalid.size():
 		var path := path_for("corrupt%d" % index)
 		write_text(path, invalid[index])
@@ -199,12 +199,12 @@ func test_ui() -> void:
 	check(main.nickname_input.text == main.player_nickname and not main.leaderboard_panel.visible, "nickname fixed for session")
 	end_round(main)
 	check(main.result_label.text.contains("한글장인12") and main.result_label.text.contains("시간 종료!"), "result keeps session nickname")
-	check(main.save_label.text.contains("저장하지 않습니다") and not FileAccess.file_exists(path), "practice never creates legacy ranking")
+	check(main.save_label.text == "기록 저장 완료" and main.ranking.records.size() == 1 and main.ranking.records[0].score == 0, "zero currency round saves once")
 	for repeat in 5:
 		main._process(0.0)
 		main._finish_if_needed()
 		main._on_mold_clicked(0)
-	check(not FileAccess.file_exists(path), "repeat finish/frame/input cannot save zero records")
+	check(main.ranking.records.size() == 1 and main.ranking.next_order == 1, "repeat finish/frame/input cannot duplicate record")
 	main.action_button.pressed.emit()
 	check(main.session.running and main.player_nickname == "한글장인12", "retry keeps nickname")
 	end_round(main)
@@ -212,13 +212,13 @@ func test_ui() -> void:
 	check(not main.has_started and main.nickname_row.visible and main.leaderboard_panel.visible, "return to start and existing leaderboard")
 	main.queue_free()
 	await process_frame
-	# Seed only the isolated fixture, then prove the real UI never changes it.
+	# Seed an isolated TOP 10 fixture and verify currency saves through the real UI.
 	var fixture = Store.new(path)
 	for index in 12:
 		fixture.add_result("가나다라마바사아자차카타", 200 + index, index)
 	var before := FileAccess.get_file_as_string(path)
 	main = make_main(path)
-	check(main.ranking.records.size() == 10 and main.leaderboard_rows.get_child_count() == 10, "existing top ten restored read-only")
+	check(main.ranking.records.size() == 10 and main.leaderboard_rows.get_child_count() == 10, "currency top ten restored")
 	await process_frame
 	check(main.get_global_rect().encloses(main.action_button.get_global_rect()), "start controls fit with ten long names")
 	main.nickname_input.text = "한글장인"
@@ -226,7 +226,7 @@ func test_ui() -> void:
 		main.action_button.pressed.emit()
 		end_round(main)
 		main.back_button.pressed.emit()
-	check(FileAccess.get_file_as_string(path) == before and main.ranking.records.size() == 10, "multiple rounds preserve legacy file byte for byte")
+	check(FileAccess.get_file_as_string(path) != before and main.ranking.records.size() == 10 and main.ranking.next_order == 15, "multiple rounds save separately and retain top ten")
 	main.action_button.pressed.emit()
 	end_round(main)
 	await process_frame
@@ -241,7 +241,7 @@ func test_ui() -> void:
 	main.nickname_input.text = "복구검사"
 	main.action_button.pressed.emit()
 	end_round(main)
-	check(FileAccess.get_file_as_string(corrupt_path) == "broken JSON", "practice does not repair or replace existing file")
+	check(JSON.parse_string(FileAccess.get_file_as_string(corrupt_path)).version == Store.VERSION and main.ranking.records.size() == 1, "completed round repairs corrupt file")
 	main.action_button.pressed.emit()
 	check(main.session.running, "load failure does not prevent retry")
 	main.queue_free()

@@ -177,7 +177,7 @@ func run() -> void:
 	main.session.started_at = Time.get_ticks_usec() - main.Session.DURATION_USEC
 	main._process(0)
 	check(not main.dragging and not main.drag_preview.visible and main.session.bag.items.is_empty(), "process expiry cancels active drag")
-	check(not FileAccess.file_exists(main.ranking_path), "no legacy ranking write")
+	check(JSON.parse_string(FileAccess.get_file_as_string(main.ranking_path)).version == 2, "end writes only currency version")
 	main.queue_free()
 	await process_frame
 	print("G002-B TESTS: %d checks, %d failures" % [checks, failures])

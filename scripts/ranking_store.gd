@@ -1,5 +1,6 @@
 extends RefCounted
 ## A small local TOP 10 store. A failed write never replaces the in-memory ranking.
+const VERSION := 2 # Version 1 score points must never be interpreted as KRW.
 const LIMIT := 10
 const MAX_INTEGER := 9_007_199_254_740_990
 var path: String
@@ -37,6 +38,7 @@ func load_records() -> void:
 	records = []
 	next_order = 0
 	load_message = ""
+	last_error = ""
 	_read_blocked = false
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null:
@@ -53,7 +55,16 @@ func load_records() -> void:
 		load_message = "랭킹 읽기 실패. 기존 파일 보호를 위해 저장하지 않습니다."
 		return
 	var json := JSON.new()
-	if json.parse(text) != OK or not _valid_document(json.data):
+	var parse_error := json.parse(text)
+	if parse_error == OK and _valid_document(json.data, 1):
+		# Replace the old points file only after an empty currency file is staged
+		# and verified. On failure, disk stays intact but legacy rows stay hidden.
+		if _write_document(JSON.stringify({"version": VERSION, "next_order": 0, "records": []}, "\t")):
+			load_message = "기존 점수 기록을 초기화하고 원화 랭킹으로 전환했습니다."
+		else:
+			load_message = "원화 랭킹 초기화 저장 실패. 기존 파일은 보존되며 표시하지 않습니다. " + last_error
+		return
+	if parse_error != OK or not _valid_document(json.data):
 		load_message = "랭킹 파일이 손상되어 빈 랭킹으로 시작합니다. 다음 결과부터 새로 저장합니다."
 		return
 	records = json.data.records.duplicate(true)
@@ -66,8 +77,8 @@ func load_records() -> void:
 	if records.size() > LIMIT:
 		records.resize(LIMIT)
 
-func _valid_document(data: Variant) -> bool:
-	if not data is Dictionary or data.get("version") != 1 or not data.get("records") is Array or not _whole_number(data.get("next_order")):
+func _valid_document(data: Variant, expected_version: int = VERSION) -> bool:
+	if not data is Dictionary or data.get("version") != expected_version or not data.get("records") is Array or not _whole_number(data.get("next_order")):
 		return false
 	var orders := {}
 	for record in data.records:
@@ -98,7 +109,7 @@ func add_result(nickname: String, score: int, played_at: int) -> bool:
 	candidate.sort_custom(_earlier)
 	if candidate.size() > LIMIT:
 		candidate.resize(LIMIT)
-	var document := {"version": 1, "next_order": next_order + 1, "records": candidate}
+	var document := {"version": VERSION, "next_order": next_order + 1, "records": candidate}
 	if not _write_document(JSON.stringify(document, "\t")):
 		return false
 	records = candidate
