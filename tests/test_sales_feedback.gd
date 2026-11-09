@@ -27,6 +27,7 @@ func run() -> void:
 	main.set_process(false)
 	main.nickname_input.text = "반응검사"
 	main.action_button.pressed.emit()
+	complete_preparation(main)
 	await process_frame
 	await process_frame
 	var inside: Vector2 = main.sale_zone.get_global_rect().get_center()
@@ -93,15 +94,22 @@ func run() -> void:
 	for offset in [-1, 0, 1]:
 		reset(main)
 		fill(main, cases[0][0])
-		main.begin_bag_drag(59_000_000)
-		main.drop_bag_at(inside, 60_000_000 + offset)
+		main.begin_bag_drag(89_000_000)
+		main.drop_bag_at(inside, 90_000_000 + offset)
 		check(main.sales_feedback.visible == (offset < 0) and main.session.revenue == (2000 if offset < 0 else 0), "deadline wins before feedback")
-		main.session.advance(60_000_000)
-		main._render(60_000_000)
+		main.session.advance(90_000_000)
+		main._render(90_000_000)
 		check(main.sales_feedback_until == 0 and main.sales_feedback.text.is_empty() and not main.sales_feedback.visible, "end clears active feedback")
 		main.action_button.pressed.emit()
+		complete_preparation(main)
 		check(main.session.running and main.sales_feedback_until == 0 and not main.sales_feedback.visible, "retry never shows old feedback")
 	main.queue_free()
 	await process_frame
 	print("G003-B TESTS: %d checks, %d failures" % [checks, failures])
 	quit(1 if failures else 0)
+
+func complete_preparation(main) -> void:
+	if main.session.preparing:
+		main.session.advance(main.session.started_at)
+		main.session.started_at = Time.get_ticks_usec()
+		main._render(Time.get_ticks_usec())

@@ -4,12 +4,14 @@ extends RefCounted
 const Board = preload("res://scripts/cooking_board.gd")
 const Mold = preload("res://scripts/cooking_mold.gd")
 const Bag = preload("res://scripts/sales_bag.gd")
-const DURATION_USEC := 60_000_000
+const DURATION_USEC := 90_000_000
+const PREPARATION_USEC := 3_000_000
 const MOLD_COUNT := Board.MOLD_COUNT
 enum Tool { NONE, BATTER, FILLING }
 var board = Board.new()
 var bag = Bag.new()
 var revenue := 0
+var preparing := false
 var molds: Array:
 	get: return board.molds
 var running := false
@@ -28,19 +30,34 @@ func _clear() -> void:
 	feedback.assign(["", "", "", "", "", ""])
 	feedback_at.assign([0, 0, 0, 0, 0, 0])
 
+# start begins active play; prepare is the user-facing entry point.
 func start(now: int) -> void:
 	_clear()
+	preparing = false
 	revenue = 0
 	started_at = now
 	running = true
+
+func prepare(now: int) -> void:
+	start(now + PREPARATION_USEC)
+	running = false
+	preparing = true
+
+func preparation_number(now: int) -> int:
+	return ceili(maxi(0, started_at - now) / 1_000_000.0) if preparing else 0
 
 func remaining_usec(now: int) -> int:
 	return clampi(DURATION_USEC - (now - started_at), 0, DURATION_USEC)
 
 func advance(now: int) -> void:
+	if preparing:
+		if now < started_at:
+			return
+		preparing = false
+		running = true
 	if not running:
 		return
-	# Deadline wins over tool changes, ingredients, flipping and cooking.
+	# The scheduled preparation deadline is the origin, even on a late frame.
 	if now - started_at >= DURATION_USEC:
 		running = false
 		_clear()

@@ -6,12 +6,12 @@ enum State { EMPTY, FIRST_BATTER, FILLING_ADDED, SIDE_1, SIDE_2, READY, BURNT }
 enum SideQuality { COOKING, PERFECT, NORMAL, BURNT }
 enum Quality { NONE, DELICIOUS, NORMAL, BURNT }
 
-# Play-test baseline from the spec; changes require subsequent playtest agreement.
+# Confirmed normal -> perfect -> burnt timing (Notion 13.3).
 const FIRST_MIN_USEC := 5_000_000
-const FIRST_PERFECT_END_USEC := 7_000_000
+const FIRST_NORMAL_END_USEC := 7_000_000
 const FIRST_BURN_AFTER_USEC := 9_000_000
 const SECOND_MIN_USEC := 3_000_000
-const SECOND_PERFECT_END_USEC := 4_500_000
+const SECOND_NORMAL_END_USEC := 4_500_000
 const SECOND_BURN_AFTER_USEC := 6_000_000
 
 var state: State = State.EMPTY
@@ -23,18 +23,18 @@ var second_quality: SideQuality = SideQuality.COOKING
 var quality: Quality = Quality.NONE
 
 static func first_quality_at(elapsed_usec: int) -> SideQuality:
-	return _quality_at(elapsed_usec, FIRST_MIN_USEC, FIRST_PERFECT_END_USEC, FIRST_BURN_AFTER_USEC)
+	return _quality_at(elapsed_usec, FIRST_MIN_USEC, FIRST_NORMAL_END_USEC, FIRST_BURN_AFTER_USEC)
 
 static func second_quality_at(elapsed_usec: int) -> SideQuality:
-	return _quality_at(elapsed_usec, SECOND_MIN_USEC, SECOND_PERFECT_END_USEC, SECOND_BURN_AFTER_USEC)
+	return _quality_at(elapsed_usec, SECOND_MIN_USEC, SECOND_NORMAL_END_USEC, SECOND_BURN_AFTER_USEC)
 
-static func _quality_at(elapsed_usec: int, minimum: int, perfect_end: int, burn_after: int) -> SideQuality:
+static func _quality_at(elapsed_usec: int, minimum: int, normal_end: int, burn_after: int) -> SideQuality:
 	if elapsed_usec < minimum:
 		return SideQuality.COOKING
-	if elapsed_usec <= perfect_end:
-		return SideQuality.PERFECT
-	if elapsed_usec <= burn_after:
+	if elapsed_usec <= normal_end:
 		return SideQuality.NORMAL
+	if elapsed_usec <= burn_after:
+		return SideQuality.PERFECT
 	return SideQuality.BURNT
 
 func elapsed_at(now: int) -> int:

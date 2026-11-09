@@ -6,6 +6,7 @@ var ranking_path := "user://rankings.json"
 var ranking: RefCounted
 var player_nickname := ""
 var result_recorded := false
+var preparation_label: Label
 var nickname_input: LineEdit
 var nickname_row: HBoxContainer
 var nickname_confirmation: ConfirmationDialog
@@ -67,7 +68,7 @@ func _ready() -> void:
 	revenue_label.add_theme_font_size_override("font_size", 20)
 	header.add_child(revenue_label)
 	var help := Label.new()
-	help.text = "주전자 반죽 → 주걱 팥 → 주전자 반죽 → 도구 보유 중에도 뒤집기·수거\n첫 면 5~7초 완벽 / 9초 초과 탐 · 두 번째 면 3~4.5초 완벽 / 6초 초과 탐"
+	help.text = "주전자 반죽 → 주걱 팥 → 주전자 반죽 → 도구 보유 중에도 뒤집기·수거\n첫 면 5~7초 일반 / 7초 초과~9초 완벽 · 두 번째 면 3~4.5초 일반 / 4.5초 초과~6초 완벽"
 	help.add_theme_font_size_override("font_size", 16)
 	column.add_child(help)
 	nickname_row = HBoxContainer.new()
@@ -205,6 +206,16 @@ func _ready() -> void:
 	back_button.text = "시작 화면으로"
 	back_button.pressed.connect(_show_start)
 	column.add_child(back_button)
+	preparation_label = Label.new()
+	preparation_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	preparation_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	preparation_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	preparation_label.add_theme_font_size_override("font_size", 72)
+	preparation_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	preparation_label.add_theme_constant_override("outline_size", 12)
+	preparation_label.mouse_filter = Control.MOUSE_FILTER_STOP
+	preparation_label.z_index = 200
+	add_child(preparation_label)
 	_refresh_rankings()
 	_render(Time.get_ticks_usec())
 
@@ -248,7 +259,7 @@ func _accept_nickname(value: String) -> void:
 	validation_label.text = RankingStore.nickname_error(value)
 
 func _start_round() -> void:
-	if session.running or nickname_pending:
+	if session.running or session.preparing or nickname_pending:
 		return
 	if not has_started:
 		# Commit any Korean IME composition before reading the final nickname.
@@ -267,7 +278,7 @@ func _start_round() -> void:
 	_cancel_bag_drag()
 	bag_hint.text = "3개를 모아 판매 영역으로\n취소: Esc / 우클릭"
 	_clear_sales_feedback()
-	session.start(Time.get_ticks_usec())
+	session.prepare(Time.get_ticks_usec())
 	_render(Time.get_ticks_usec())
 
 func _process(_delta: float) -> void:
@@ -389,14 +400,16 @@ func _render(now: int) -> void:
 	var remaining: float = ceili(remaining_usec / 100_000.0) / 10.0
 	status_label.text = "남은 시간 %04.1f초" % remaining
 	status_label.visible = has_started
-	var ended: bool = has_started and not session.running
+	var ended: bool = has_started and not session.running and not session.preparing
 	var display_time: int = mini(now, session.started_at + Session.DURATION_USEC) if ended else now
 	for index in mold_views.size():
 		var message: String = session.feedback[index] if now - session.feedback_at[index] < 1_200_000 else ""
 		mold_views[index].render(session.molds[index], index, display_time, session.running, message)
-	result_label.text = "%s 님 · 시간 종료!\n총 판매 금액 %d원 · 최고 판매 금액 %d원" % [player_nickname, session.revenue, ranking.best_score()] if ended else "60초 동안 굽고 수거해 3개 봉투를 드래그하여 판매하세요."
-	result_label.visible = not session.running
-	tool_row.visible = session.running
+	result_label.text = "%s 님 · 시간 종료!\n총 판매 금액 %d원 · 최고 판매 금액 %d원" % [player_nickname, session.revenue, ranking.best_score()] if ended else "3초 준비 후 90초 동안 굽기 → 수거 → 3개 봉투 판매를 진행하세요."
+	result_label.visible = not session.running and not session.preparing
+	preparation_label.visible = session.preparing
+	preparation_label.text = str(session.preparation_number(now)) if session.preparing else ""
+	tool_row.visible = session.running or session.preparing
 	batter_button.set_pressed_no_signal(session.selected_tool == Session.Tool.BATTER)
 	filling_button.set_pressed_no_signal(session.selected_tool == Session.Tool.FILLING)
 	batter_button.disabled = not session.running
@@ -405,7 +418,7 @@ func _render(now: int) -> void:
 	tool_cursor.text = "▰ 주전자 · 반죽" if session.selected_tool == Session.Tool.BATTER else "▱ 주걱 · 팥"
 	tool_cursor.visible = session.running and session.selected_tool != Session.Tool.NONE and not dragging
 	tool_cursor.position = (get_local_mouse_position() + Vector2(18, 18)).clamp(Vector2.ZERO, (size - tool_cursor.size).max(Vector2.ZERO))
-	sales_row.visible = session.running
+	sales_row.visible = session.running or session.preparing
 	revenue_label.visible = has_started
 	revenue_label.text = "수익 %d원" % session.revenue
 	var contents: PackedStringArray = []
@@ -416,17 +429,17 @@ func _render(now: int) -> void:
 	drag_preview.text = bag_button.text
 	drag_preview.visible = dragging and session.running
 	drag_preview.position = (get_local_mouse_position() + Vector2(18, 18)).clamp(Vector2.ZERO, (size - drag_preview.size).max(Vector2.ZERO))
-	action_button.visible = not session.running
+	action_button.visible = not session.running and not session.preparing
 	action_button.text = "다시 하기" if ended else "게임 시작"
 	nickname_row.visible = not has_started
 	validation_label.visible = not has_started and not validation_label.text.is_empty()
-	mold_row.visible = session.running
-	leaderboard_panel.visible = not session.running
-	save_label.visible = not session.running and not save_label.text.is_empty()
+	mold_row.visible = session.running or session.preparing
+	leaderboard_panel.visible = not session.running and not session.preparing
+	save_label.visible = not session.running and not session.preparing and not save_label.text.is_empty()
 	back_button.visible = ended
 
 func _finish_if_needed() -> void:
-	if not has_started or session.running or result_recorded:
+	if not has_started or session.running or session.preparing or result_recorded:
 		return
 	# Mark the attempt before writing: repeated end/frame/UI events cannot save twice.
 	_cancel_bag_drag()
@@ -436,7 +449,7 @@ func _finish_if_needed() -> void:
 	_refresh_rankings()
 
 func _show_start() -> void:
-	if session.running:
+	if session.running or session.preparing:
 		return
 	has_started = false
 	validation_label.text = ""

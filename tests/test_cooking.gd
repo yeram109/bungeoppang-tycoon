@@ -34,14 +34,14 @@ func run() -> void:
 	quit(1 if failures else 0)
 
 func test_quality_boundaries() -> void:
-	for boundary in [[5_000_000, Q.COOKING, Q.PERFECT, Q.PERFECT],
-		[7_000_000, Q.PERFECT, Q.PERFECT, Q.NORMAL],
-		[9_000_000, Q.NORMAL, Q.NORMAL, Q.BURNT]]:
+	for boundary in [[5_000_000, Q.COOKING, Q.NORMAL, Q.NORMAL],
+		[7_000_000, Q.NORMAL, Q.NORMAL, Q.PERFECT],
+		[9_000_000, Q.PERFECT, Q.PERFECT, Q.BURNT]]:
 		for offset in [-1, 0, 1]:
 			check(Mold.first_quality_at(boundary[0] + offset) == boundary[offset + 2], "first quality boundary %s/%s" % [boundary[0], offset])
-	for boundary in [[3_000_000, Q.COOKING, Q.PERFECT, Q.PERFECT],
-		[4_500_000, Q.PERFECT, Q.PERFECT, Q.NORMAL],
-		[6_000_000, Q.NORMAL, Q.NORMAL, Q.BURNT]]:
+	for boundary in [[3_000_000, Q.COOKING, Q.NORMAL, Q.NORMAL],
+		[4_500_000, Q.NORMAL, Q.NORMAL, Q.PERFECT],
+		[6_000_000, Q.PERFECT, Q.PERFECT, Q.BURNT]]:
 		for offset in [-1, 0, 1]:
 			check(Mold.second_quality_at(boundary[0] + offset) == boundary[offset + 2], "second quality boundary %s/%s" % [boundary[0], offset])
 
@@ -58,7 +58,7 @@ func test_ingredients() -> void:
 	check(mold.add_batter(start + 5_300_000) and mold.state == S.SIDE_1, "second batter completes ingredients")
 	check(mold.side_started_at == start and mold.elapsed_at(start + 5_300_000) == 5_300_000, "ingredients never restart timer")
 	check(not mold.add_batter(start + 5_300_000) and not mold.add_filling(start + 5_300_000), "complete recipe rejects extra ingredients")
-	check(mold.flip(start + 5_300_000) and mold.first_quality == Q.PERFECT, "ingredient time counts toward first-side quality")
+	check(mold.flip(start + 5_300_000) and mold.first_quality == Q.NORMAL, "ingredient time counts toward first-side quality")
 	check(mold.state == S.SIDE_2 and mold.side_started_at == start + 5_300_000, "flip starts independent second-side timer")
 	check(mold.elapsed_at(start + 5_300_000) == 0 and not mold.flip(start + 5_300_000), "duplicate flip cannot reset second-side clock")
 	check(not mold.add_batter(start + 5_400_000) and not mold.add_filling(start + 5_400_000), "second side rejects ingredients")
@@ -111,37 +111,37 @@ func test_second_side() -> void:
 			if expected_side == Q.BURNT:
 				expected_quality = Mold.Quality.BURNT
 			elif expected_side != Q.COOKING:
-				expected_quality = Mold.Quality.DELICIOUS if first_time <= 7_000_000 and second_time <= 4_500_000 else Mold.Quality.NORMAL
+				expected_quality = Mold.Quality.DELICIOUS if first_time > 7_000_000 and second_time > 4_500_000 else Mold.Quality.NORMAL
 			check(mold.quality == expected_quality, "combined product quality matches both sides")
 			mold.advance(flipped_at + second_time)
 			check(mold.state == expected_state and mold.quality == expected_quality, "same timestamp advance is idempotent")
 
 func test_held_food() -> void:
 	var mold = prepared()
-	mold.flip(5_000_000)
-	mold.advance(8_000_000)
-	check(mold.state == S.READY and mold.quality == Mold.Quality.DELICIOUS, "second side becomes ready at three seconds")
-	check(not mold.add_batter(8_000_000) and not mold.add_filling(8_000_000) and not mold.flip(8_000_000), "ready food blocks new cooking actions")
-	mold.advance(9_500_000)
-	check(mold.state == S.READY and mold.quality == Mold.Quality.DELICIOUS, "held food stays perfect through 4.5 seconds")
-	mold.advance(9_500_001)
-	check(mold.state == S.READY and mold.quality == Mold.Quality.NORMAL, "held food keeps cooking past perfect window")
+	mold.flip(8_000_000)
 	mold.advance(11_000_000)
-	check(mold.state == S.READY and mold.quality == Mold.Quality.NORMAL, "held normal food remains in mold through six seconds")
-	mold.advance(11_000_001)
+	check(mold.state == S.READY and mold.quality == Mold.Quality.NORMAL, "second side becomes ready at three seconds")
+	check(not mold.add_batter(11_000_000) and not mold.add_filling(11_000_000) and not mold.flip(11_000_000), "ready food blocks new cooking actions")
+	mold.advance(12_500_000)
+	check(mold.state == S.READY and mold.quality == Mold.Quality.NORMAL, "held food stays normal through 4.5 seconds")
+	mold.advance(12_500_001)
+	check(mold.state == S.READY and mold.quality == Mold.Quality.DELICIOUS, "held food becomes perfect after 4.5 seconds")
+	mold.advance(14_000_000)
+	check(mold.state == S.READY and mold.quality == Mold.Quality.DELICIOUS, "held perfect food remains in mold through six seconds")
+	mold.advance(14_000_001)
 	check(mold.state == S.BURNT and mold.quality == Mold.Quality.BURNT, "held food burns after six seconds")
 	mold.advance(1_000_000_000)
 	check(mold.state == S.BURNT and mold.second_quality == Q.BURNT, "burnt second side never auto empties")
 	check(not mold.add_batter(1_000_000_000) and not mold.add_filling(1_000_000_000) and not mold.flip(1_000_000_000), "burnt second side cannot restart cooking")
 	# A stalled frame must jump straight to burnt, without requiring READY first.
 	var jumped = prepared()
-	jumped.flip(5_000_000)
-	jumped.advance(11_000_001)
+	jumped.flip(8_000_000)
+	jumped.advance(14_000_001)
 	check(jumped.state == mold.state and jumped.quality == mold.quality, "large time jump matches incremental cooking")
 	for action in ["add_batter", "add_filling", "flip"]:
 		var overdue = prepared()
-		overdue.flip(5_000_000)
-		check(not overdue.call(action, 11_000_001) and overdue.state == S.BURNT, "late second-side action processes burning first")
+		overdue.flip(8_000_000)
+		check(not overdue.call(action, 14_000_001) and overdue.state == S.BURNT, "late second-side action processes burning first")
 
 func test_six_molds() -> void:
 	var board = Board.new()
@@ -168,7 +168,7 @@ func test_six_molds() -> void:
 	board.advance(10_000_000)
 	check(board.molds[2].state == S.READY and board.molds[3].state == S.SIDE_2, "different second-side starts reach ready independently")
 	board.advance(11_500_001)
-	check(board.molds[2].quality == Mold.Quality.NORMAL and board.molds[3].quality == Mold.Quality.DELICIOUS, "ready molds have independent live quality")
+	check(board.molds[2].quality == Mold.Quality.NORMAL and board.molds[3].quality == Mold.Quality.NORMAL and board.molds[2].second_quality == Q.PERFECT and board.molds[3].second_quality == Q.NORMAL, "ready molds have independent live quality")
 	check(board.molds[4].state == S.FIRST_BATTER and board.molds[5].state == S.FIRST_BATTER, "later preparation remains independent of ready molds")
 	board.add_batter(-1, 13_000_001)
 	check(board.molds[2].state == S.BURNT and board.molds[3].state == S.READY, "invalid input still advances all timers; only overdue mold burns")

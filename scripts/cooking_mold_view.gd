@@ -6,6 +6,7 @@ var cook_button: Button
 var progress: ProgressBar
 var feedback_label: Label
 var button_style := StyleBoxFlat.new()
+var progress_style := StyleBoxFlat.new()
 
 func _ready() -> void:
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -26,6 +27,7 @@ func _ready() -> void:
 	progress = ProgressBar.new()
 	progress.custom_minimum_size.y = 12
 	progress.show_percentage = false
+	progress.add_theme_stylebox_override("fill", progress_style)
 	add_child(progress)
 	feedback_label = Label.new()
 	feedback_label.add_theme_font_size_override("font_size", 13)
@@ -58,7 +60,8 @@ func render(mold: RefCounted, index: int, now: int, active: bool, message: Strin
 			Mold.State.READY: hint = "맛있는 붕어빵" if mold.quality == Mold.Quality.DELICIOUS else "일반 붕어빵"
 			Mold.State.BURNT: hint = "탄 붕어빵 · 틀에 남음"
 		cook_button.text = "%s · %s\n%s" % [phase, quality_text, hint]
-		hint = "계속 조리 중 · 클릭 수거 · 도구 유지" if mold.state == Mold.State.READY else ("클릭 수거 · 도구 유지" if mold.state == Mold.State.BURNT else "첫 면 5~7초 / 두 번째 면 3~4.5초 완벽")
+		hint = "계속 조리 중 · 클릭 수거 · 도구 유지" if mold.state == Mold.State.READY else ("클릭 수거 · 도구 유지" if mold.state == Mold.State.BURNT else "일반 → 완벽 → 탐 · %d초 초과 탐" % (9 if first else 6))
 	feedback_label.text = message if not message.is_empty() else hint
 	feedback_label.modulate = Color("ffb4a0") if not message.is_empty() else Color.WHITE
 	button_style.bg_color = color
+	progress_style.bg_color = color

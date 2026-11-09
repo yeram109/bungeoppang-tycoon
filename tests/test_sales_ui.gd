@@ -14,10 +14,10 @@ func cook(main, index: int, quality: int, now: int) -> void:
 	if quality == Mold.Quality.BURNT:
 		s.board.add_batter(index, now - 10_000_000)
 	else:
-		s.board.add_batter(index, now - (8_000_000 if quality == Mold.Quality.DELICIOUS else 10_000_000))
-		s.board.add_filling(index, now - (8_000_000 if quality == Mold.Quality.DELICIOUS else 10_000_000))
-		s.board.add_batter(index, now - (8_000_000 if quality == Mold.Quality.DELICIOUS else 10_000_000))
-		s.board.flip(index, now - (3_000_000 if quality == Mold.Quality.DELICIOUS else 5_000_000))
+		s.board.add_batter(index, now - (13_000_000 if quality == Mold.Quality.DELICIOUS else 8_000_000))
+		s.board.add_filling(index, now - (13_000_000 if quality == Mold.Quality.DELICIOUS else 8_000_000))
+		s.board.add_batter(index, now - (13_000_000 if quality == Mold.Quality.DELICIOUS else 8_000_000))
+		s.board.flip(index, now - (5_000_000 if quality == Mold.Quality.DELICIOUS else 3_000_000))
 	s.advance(now)
 func run() -> void:
 	var main = load("res://scenes/main.tscn").instantiate()
@@ -26,6 +26,7 @@ func run() -> void:
 	main.set_process(false)
 	main.nickname_input.text = "봉투검사"
 	main.action_button.pressed.emit()
+	complete_preparation(main)
 	main.session.start(0)
 	main._render(0)
 	await process_frame
@@ -90,8 +91,8 @@ func run() -> void:
 	for elapsed in [4_500_000, 4_500_001, 6_000_000, 6_000_001]:
 		main.session.start(0)
 		cook(main, 0, Mold.Quality.DELICIOUS, 10_000_000)
-		main.click_mold_at(0, 7_000_000 + elapsed)
-		var expected: int = Mold.Quality.DELICIOUS if elapsed <= 4_500_000 else (Mold.Quality.NORMAL if elapsed <= 6_000_000 else Mold.Quality.BURNT)
+		main.click_mold_at(0, 5_000_000 + elapsed)
+		var expected: int = Mold.Quality.NORMAL if elapsed <= 4_500_000 else (Mold.Quality.DELICIOUS if elapsed <= 6_000_000 else Mold.Quality.BURNT)
 		check(main.session.bag.items == [expected], "click refreshes quality boundary")
 	for tool in [main.Session.Tool.NONE, main.Session.Tool.BATTER, main.Session.Tool.FILLING]:
 		for quality in [Mold.Quality.DELICIOUS, Mold.Quality.NORMAL, Mold.Quality.BURNT]:
@@ -129,7 +130,7 @@ func run() -> void:
 			cook(main, 0, Mold.Quality.BURNT, 10_000_000)
 			if tool != main.Session.Tool.NONE:
 				main.session.select_tool(tool, 10_000_000)
-			main.click_mold_at(0, 60_000_000 + offset)
+			main.click_mold_at(0, 90_000_000 + offset)
 			check(main.session.bag.items == ([Mold.Quality.BURNT] if offset < 0 else []), "collection respects deadline with every tool")
 			check(main.session.selected_tool == (tool if offset < 0 else main.Session.Tool.NONE), "deadline cleanup wins over tool preservation")
 	# Consecutive sales accumulate once; an old drag token cannot sell a refilled bag.
@@ -155,14 +156,15 @@ func run() -> void:
 		for index in 3:
 			cook(main, index, Mold.Quality.DELICIOUS, 10_000_000)
 			main.click_mold_at(index, 10_000_000)
-		main.begin_bag_drag(59_999_998)
-		main.drop_bag_at(inside, 60_000_000 + offset)
+		main.begin_bag_drag(89_999_998)
+		main.drop_bag_at(inside, 90_000_000 + offset)
 		check(main.session.revenue == (2000 if offset < 0 else 0), "deadline drop boundary")
 		check(not main.dragging and main.session.bag.items.is_empty(), "drop or end clears drag and bag")
 		if offset >= 0:
 			check(not main.sales_row.visible and not main.drag_preview.visible, "end hides bag and preview")
 			check(main.result_label.text.contains("0원"), "result shows actual revenue")
 	main.action_button.pressed.emit()
+	complete_preparation(main)
 	check(main.session.running and main.session.revenue == 0 and main.session.bag.items.is_empty() and not main.dragging, "retry resets")
 	# Real button signals collect and gui_input starts drag.
 	var now := Time.get_ticks_usec()
@@ -182,3 +184,9 @@ func run() -> void:
 	await process_frame
 	print("G002-B TESTS: %d checks, %d failures" % [checks, failures])
 	quit(1 if failures else 0)
+
+func complete_preparation(main) -> void:
+	if main.session.preparing:
+		main.session.advance(main.session.started_at)
+		main.session.started_at = Time.get_ticks_usec()
+		main._render(Time.get_ticks_usec())
