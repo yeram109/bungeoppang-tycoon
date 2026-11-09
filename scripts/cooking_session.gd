@@ -10,6 +10,11 @@ enum Tool { NONE, BATTER, FILLING }
 var board = Board.new()
 var bag = Bag.new()
 var revenue := 0
+var duration_usec := DURATION_USEC
+var is_playtest := false
+var sold_bags := 0
+var end_bag_items := 0
+var end_mold_items := 0
 var molds: Array:
 	get: return board.molds
 var running := false
@@ -28,20 +33,31 @@ func _clear() -> void:
 	feedback.assign(["", "", "", "", "", ""])
 	feedback_at.assign([0, 0, 0, 0, 0, 0])
 
-func start(now: int) -> void:
+func start(now: int, playtest_seconds: int = 0) -> void:
 	_clear()
+	is_playtest = playtest_seconds in [60, 90]
+	duration_usec = playtest_seconds * 1_000_000 if is_playtest else DURATION_USEC
+	sold_bags = 0
+	end_bag_items = 0
+	end_mold_items = 0
 	revenue = 0
 	started_at = now
 	running = true
 
 func remaining_usec(now: int) -> int:
-	return clampi(DURATION_USEC - (now - started_at), 0, DURATION_USEC)
+	return clampi(duration_usec - (now - started_at), 0, duration_usec)
 
 func advance(now: int) -> void:
 	if not running:
 		return
 	# Deadline wins over tool changes, ingredients, flipping and cooking.
-	if now - started_at >= DURATION_USEC:
+	if now - started_at >= duration_usec:
+		# Capture before _clear removes food. Preparation, READY and BURNT all count.
+		end_bag_items = bag.items.size()
+		end_mold_items = 0
+		for mold in molds:
+			if mold.state != Mold.State.EMPTY:
+				end_mold_items += 1
 		running = false
 		_clear()
 		return
@@ -80,6 +96,7 @@ func sell_bag(expected_bag_id: int, now: int) -> Dictionary:
 		return {"sold": false, "amount": 0}
 	var result: Dictionary = bag.sell(expected_bag_id)
 	if result.sold:
+		sold_bags += 1
 		revenue += result.amount
 	return result
 

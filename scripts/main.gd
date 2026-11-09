@@ -6,6 +6,9 @@ var ranking_path := "user://rankings.json"
 var ranking: RefCounted
 var player_nickname := ""
 var result_recorded := false
+var mode_select: OptionButton
+var copy_result_button: Button
+var round_playtest_seconds := 0
 var nickname_input: LineEdit
 var nickname_row: HBoxContainer
 var nickname_confirmation: ConfirmationDialog
@@ -90,6 +93,11 @@ func _ready() -> void:
 		edit_nickname.text = "입력·변경"
 		edit_nickname.pressed.connect(_open_nickname_dialog)
 		nickname_row.add_child(edit_nickname)
+	mode_select = OptionButton.new()
+	mode_select.add_item("정식 게임 · 60초 · 원화 랭킹 저장")
+	mode_select.add_item("플레이테스트 · 60초 · 랭킹 미저장")
+	mode_select.add_item("플레이테스트 · 90초 · 랭킹 미저장")
+	column.add_child(mode_select)
 	validation_label = Label.new()
 	validation_label.add_theme_color_override("font_color", Color("ffb4a0"))
 	column.add_child(validation_label)
@@ -177,6 +185,10 @@ func _ready() -> void:
 	result_label = Label.new()
 	result_label.add_theme_font_size_override("font_size", 22)
 	column.add_child(result_label)
+	copy_result_button = Button.new()
+	copy_result_button.text = "테스트 결과 복사"
+	copy_result_button.pressed.connect(_copy_playtest_result)
+	column.add_child(copy_result_button)
 	leaderboard_panel = VBoxContainer.new()
 	leaderboard_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	column.add_child(leaderboard_panel)
@@ -257,6 +269,7 @@ func _start_round() -> void:
 		if not error.is_empty():
 			validation_label.text = error
 			return
+		round_playtest_seconds = [0, 60, 90][mode_select.selected]
 		player_nickname = nickname_input.text.strip_edges()
 		nickname_input.text = player_nickname
 	nickname_input.release_focus()
@@ -267,7 +280,7 @@ func _start_round() -> void:
 	_cancel_bag_drag()
 	bag_hint.text = "3개를 모아 판매 영역으로\n취소: Esc / 우클릭"
 	_clear_sales_feedback()
-	session.start(Time.get_ticks_usec())
+	session.start(Time.get_ticks_usec(), round_playtest_seconds)
 	_render(Time.get_ticks_usec())
 
 func _process(_delta: float) -> void:
@@ -387,15 +400,19 @@ func _render(now: int) -> void:
 	# Display only: a positive remainder must never round down to 00.0.
 	var remaining_usec: int = session.remaining_usec(now) if has_started else Session.DURATION_USEC
 	var remaining: float = ceili(remaining_usec / 100_000.0) / 10.0
-	status_label.text = "남은 시간 %04.1f초" % remaining
+	status_label.text = ("테스트 · " if session.is_playtest else "") + "남은 시간 %04.1f초" % remaining
 	status_label.visible = has_started
 	var ended: bool = has_started and not session.running
-	var display_time: int = mini(now, session.started_at + Session.DURATION_USEC) if ended else now
+	var display_time: int = mini(now, session.started_at + session.duration_usec) if ended else now
 	for index in mold_views.size():
 		var message: String = session.feedback[index] if now - session.feedback_at[index] < 1_200_000 else ""
 		mold_views[index].render(session.molds[index], index, display_time, session.running, message)
-	result_label.text = "%s 님 · 시간 종료!\n총 판매 금액 %d원 · 최고 판매 금액 %d원" % [player_nickname, session.revenue, ranking.best_score()] if ended else "60초 동안 굽고 수거해 3개 봉투를 드래그하여 판매하세요."
+	result_label.text = "%s 님 · 시간 종료!\n총 판매 금액 %d원 · 최고 판매 금액 %d원" % [player_nickname, session.revenue, ranking.best_score()] if ended else "모드를 선택하고 굽기 → 수거 → 3개 봉투 판매를 진행하세요."
+	if ended and session.is_playtest:
+		result_label.text = playtest_report()
 	result_label.visible = not session.running
+	mode_select.visible = not has_started
+	copy_result_button.visible = ended and session.is_playtest
 	tool_row.visible = session.running
 	batter_button.set_pressed_no_signal(session.selected_tool == Session.Tool.BATTER)
 	filling_button.set_pressed_no_signal(session.selected_tool == Session.Tool.FILLING)
@@ -421,7 +438,7 @@ func _render(now: int) -> void:
 	nickname_row.visible = not has_started
 	validation_label.visible = not has_started and not validation_label.text.is_empty()
 	mold_row.visible = session.running
-	leaderboard_panel.visible = not session.running
+	leaderboard_panel.visible = not session.running and not (ended and session.is_playtest)
 	save_label.visible = not session.running and not save_label.text.is_empty()
 	back_button.visible = ended
 
@@ -431,9 +448,20 @@ func _finish_if_needed() -> void:
 	# Mark the attempt before writing: repeated end/frame/UI events cannot save twice.
 	_cancel_bag_drag()
 	result_recorded = true
+	if session.is_playtest:
+		save_label.text = "플레이테스트 결과 · 원화 랭킹에 저장하지 않습니다. 결과 복사로 기록하세요."
+		return
 	var saved: bool = ranking.add_result(player_nickname, session.revenue, int(Time.get_unix_time_from_system() * 1000))
 	save_label.text = "기록 저장 완료" if saved else "기록 저장 실패: " + ranking.last_error
 	_refresh_rankings()
+
+func playtest_report() -> String:
+	return "%s 님 · 플레이테스트 결과\n플레이 시간 %d초 · 판매 성공 봉투 %d개\n총 판매 금액 %d원\n종료 직전 봉투 속 %d개 · 틀에 남은 붕어빵 %d개" % [player_nickname, session.duration_usec / 1_000_000, session.sold_bags, session.revenue, session.end_bag_items, session.end_mold_items]
+
+func _copy_playtest_result() -> void:
+	if has_started and not session.running and session.is_playtest:
+		DisplayServer.clipboard_set(playtest_report())
+		save_label.text = "테스트 결과 복사 완료 · 원화 랭킹 미저장"
 
 func _show_start() -> void:
 	if session.running:
