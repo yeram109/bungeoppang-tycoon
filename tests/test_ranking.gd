@@ -1,7 +1,7 @@
 extends SceneTree
 
 const Store = preload("res://scripts/ranking_store.gd")
-const Session = preload("res://scripts/game_session.gd")
+const Session = preload("res://scripts/cooking_session.gd")
 var checks := 0
 var failures := 0
 var directory: String
@@ -74,8 +74,8 @@ func test_nickname_cancel() -> void:
 	check(main.session.running and main.player_nickname == "겨울장인", "confirmed change becomes session name")
 	main._stage_nickname("늦은입력")
 	check(not main.nickname_pending and main.player_nickname == "겨울장인", "running session rejects late draft")
-	end_round(main, 60)
-	check(main.ranking.records.size() == 1 and main.ranking.records[0].nickname == "겨울장인", "only confirmed name reaches saved result")
+	end_round(main)
+	check(main.result_label.text.contains("겨울장인") and not FileAccess.file_exists(main.ranking_path), "confirmed name reaches result without creating legacy record")
 	main.queue_free()
 	await process_frame
 
@@ -169,8 +169,7 @@ func make_main(path: String) -> Node:
 	main.set_process(false)
 	return main
 
-func end_round(main: Node, score: int = 0) -> void:
-	main.session.score = score
+func end_round(main: Node) -> void:
 	main.session.started_at = Time.get_ticks_usec() - Session.DURATION_USEC
 	main._process(0.0)
 
@@ -198,55 +197,52 @@ func test_ui() -> void:
 	main._accept_nickname("다른이름")
 	check(main.nickname_input.text == "한글장인12", "late dialog callback cannot change running session")
 	check(main.nickname_input.text == main.player_nickname and not main.leaderboard_panel.visible, "nickname fixed for session")
-	end_round(main, 100)
-	check(main.result_label.text.contains("한글장인12") and main.result_label.text.contains("최종 점수 100점") and main.result_label.text.contains("최고 점수 100점"), "result includes nickname score best")
-	check(main.save_label.text.begins_with("기록 저장 완료") and main.ranking.records.size() == 1, "result automatically saved")
-	check(main.ranking.records[0].nickname == "한글장인12", "session name equals stored value")
-	var saved_text := FileAccess.get_file_as_string(path)
+	end_round(main)
+	check(main.result_label.text.contains("한글장인12") and main.result_label.text.contains("시간 종료!"), "result keeps session nickname")
+	check(main.save_label.text.contains("저장하지 않습니다") and not FileAccess.file_exists(path), "practice never creates legacy ranking")
 	for repeat in 5:
 		main._process(0.0)
 		main._finish_if_needed()
 		main._on_mold_clicked(0)
-	check(main.ranking.records.size() == 1 and FileAccess.get_file_as_string(path) == saved_text, "repeat finish/frame/input saves exactly once")
+	check(not FileAccess.file_exists(path), "repeat finish/frame/input cannot save zero records")
 	main.action_button.pressed.emit()
-	check(main.session.running and main.player_nickname == "한글장인12" and main.session.score == 0, "retry keeps name and resets gameplay")
-	end_round(main, 0)
-	check(main.ranking.records.size() == 2 and main.ranking.records[1].score == 0, "same name second zero-point play saved separately")
+	check(main.session.running and main.player_nickname == "한글장인12", "retry keeps nickname")
+	end_round(main)
 	main.back_button.pressed.emit()
-	main._process(0.0)
-	check(not main.has_started and main.nickname_row.visible and main.leaderboard_panel.visible and main.ranking.records.size() == 2, "start screen/ranking return without duplicate")
+	check(not main.has_started and main.nickname_row.visible and main.leaderboard_panel.visible, "return to start and existing leaderboard")
 	main.queue_free()
 	await process_frame
-	main = make_main(path)
-	check(main.ranking.records.size() == 2 and main.leaderboard_rows.get_child_count() == 2, "new scene restores saved leaderboard")
+	# Seed only the isolated fixture, then prove the real UI never changes it.
+	var fixture = Store.new(path)
 	for index in 12:
-		main.nickname_input.text = "가나다라마바사아자차카타"
+		fixture.add_result("가나다라마바사아자차카타", 200 + index, index)
+	var before := FileAccess.get_file_as_string(path)
+	main = make_main(path)
+	check(main.ranking.records.size() == 10 and main.leaderboard_rows.get_child_count() == 10, "existing top ten restored read-only")
+	await process_frame
+	check(main.get_global_rect().encloses(main.action_button.get_global_rect()), "start controls fit with ten long names")
+	main.nickname_input.text = "한글장인"
+	for repeat in 3:
 		main.action_button.pressed.emit()
-		end_round(main, 200 + index)
+		end_round(main)
 		main.back_button.pressed.emit()
-	check(main.ranking.records.size() == 10 and main.leaderboard_rows.get_child_count() == 10, "UI top ten after many games")
-	await process_frame
-	check(main.get_global_rect().encloses(main.action_button.get_global_rect()), "start button remains in viewport with ten long names")
+	check(FileAccess.get_file_as_string(path) == before and main.ranking.records.size() == 10, "multiple rounds preserve legacy file byte for byte")
 	main.action_button.pressed.emit()
-	end_round(main, 500)
+	end_round(main)
 	await process_frame
-	check(main.get_global_rect().encloses(main.back_button.get_global_rect()), "result controls fit viewport with ten long names")
-	check(main.leaderboard_rows.get_parent().get_v_scroll_bar().max_value > main.leaderboard_rows.get_parent().size.y, "ten rows remain accessible by scrolling")
+	check(main.get_global_rect().encloses(main.back_button.get_global_rect()), "result controls fit with ten long names")
+	check(main.leaderboard_rows.get_parent().get_v_scroll_bar().max_value > main.leaderboard_rows.get_parent().size.y, "all existing rows accessible by scrolling")
 	main.queue_free()
 	await process_frame
-	var failure_path := path_for("ui-fail")
-	main = make_main(failure_path)
-	DirAccess.make_dir_absolute(failure_path + ".tmp")
-	main.nickname_input.text = "저장실패검사"
+	var corrupt_path := path_for("ui-corrupt")
+	write_text(corrupt_path, "broken JSON")
+	main = make_main(corrupt_path)
+	check(not main.save_label.text.is_empty(), "load failure still informs user")
+	main.nickname_input.text = "복구검사"
 	main.action_button.pressed.emit()
-	end_round(main, 60)
-	check(main.result_label.text.contains("최종 점수 60점") and main.save_label.text.begins_with("저장 실패"), "failed save still shows result and truthful warning")
-	main._process(0.0)
-	check(main.ranking.records.is_empty(), "failed result is not silently retried")
-	DirAccess.remove_absolute(failure_path + ".tmp")
+	end_round(main)
+	check(FileAccess.get_file_as_string(corrupt_path) == "broken JSON", "practice does not repair or replace existing file")
 	main.action_button.pressed.emit()
-	check(main.session.running, "can play again after save failure")
-	end_round(main, 0)
-	check(main.ranking.records.size() == 1 and main.save_label.text.begins_with("기록 저장 완료"), "next completed play saves once after recovery")
+	check(main.session.running, "load failure does not prevent retry")
 	main.queue_free()
 	await process_frame
