@@ -1,6 +1,6 @@
 # 붕어빵 장인
 
-짧은 게임 제작 이벤트를 위한 Windows 오프라인 2D 미니 타이쿤 프로젝트입니다. 현재 G003-A는 60초 동안 독립된 틀 6개를 도구로 조작합니다. F002 닉네임 입력을 유지하며 판매 금액(원) TOP 10을 표시합니다. 붕어빵을 수거해 3개 봉투를 드래그 판매하며, 종료 시 최종 수익을 로컬에 저장합니다. 최종 디자인과 제출물 구성은 포함하지 않습니다.
+짧은 게임 제작 이벤트를 위한 Windows 오프라인 2D 미니 타이쿤 프로젝트입니다. 현재 G003-B는 60초 동안 독립된 틀 6개를 도구로 조작합니다. F002 닉네임 입력을 유지하며 판매 금액(원) TOP 10을 표시합니다. 붕어빵을 수거해 3개 봉투를 드래그 판매하며, 판매 성공 시 금액과 품질별 손님 반응을 1.3초 함께 표시하며, 종료 시 최종 수익을 로컬에 저장합니다. 최종 디자인과 제출물 구성은 포함하지 않습니다.
 
 - 기획 기준: [Notion MVP 기획 v0.1](https://app.notion.com/p/41387148aa578117907afd28937e1b5f)
 - 엔진: **Godot 4.7.2 stable**, 일반 GDScript 에디터 (x86_64, Compatibility 렌더러)
@@ -38,6 +38,7 @@ $godot = '.\.tools\godot\Godot_v4.7.2-stable_win64_console.exe'
 & $godot --headless --path . --script res://tests/test_sales.gd
 & $godot --headless --path . --script res://tests/test_sales_ui.gd
 & $godot --headless --path . --script res://tests/test_currency_ranking.gd
+& $godot --headless --path . --script res://tests/test_sales_feedback.gd
 ```
 
 실패 시 종료 코드 1을 반환합니다. 테스트 스크립트는 Windows Export에서 제외합니다.

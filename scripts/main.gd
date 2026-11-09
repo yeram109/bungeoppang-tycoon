@@ -35,6 +35,9 @@ var sale_zone: PanelContainer
 var bag_hint: Label
 var revenue_label: Label
 var drag_preview: Label
+const SALES_FEEDBACK_USEC := 1_300_000
+var sales_feedback: Label
+var sales_feedback_until := 0
 var dragging := false
 var dragged_bag_id := -1
 
@@ -141,7 +144,16 @@ func _ready() -> void:
 	bag_hint = Label.new()
 	bag_hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bag_hint.add_theme_font_size_override("font_size", 14)
-	sales_row.add_child(bag_hint)
+	var feedback_column := VBoxContainer.new()
+	feedback_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	feedback_column.alignment = BoxContainer.ALIGNMENT_CENTER
+	sales_row.add_child(feedback_column)
+	feedback_column.add_child(bag_hint)
+	sales_feedback = Label.new()
+	sales_feedback.add_theme_font_size_override("font_size", 20)
+	sales_feedback.add_theme_color_override("font_color", Color("ffe2a5"))
+	sales_feedback.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	feedback_column.add_child(sales_feedback)
 	sale_zone = PanelContainer.new()
 	sale_zone.custom_minimum_size = Vector2(210, 64)
 	var zone_style := StyleBoxFlat.new()
@@ -254,6 +266,7 @@ func _start_round() -> void:
 	has_started = true
 	_cancel_bag_drag()
 	bag_hint.text = "3개를 모아 판매 영역으로\n취소: Esc / 우클릭"
+	_clear_sales_feedback()
 	session.start(Time.get_ticks_usec())
 	_render(Time.get_ticks_usec())
 
@@ -311,12 +324,39 @@ func drop_bag_at(point: Vector2, now: int) -> void:
 	session.advance(now)
 	if was_dragging and session.running:
 		if sale_zone.get_global_rect().has_point(point):
+			var qualities: Array = session.bag.items
 			var result: Dictionary = session.sell_bag(token, now)
+			if result.sold:
+				_show_sales_feedback(qualities, result.amount, now)
 			bag_hint.text = "판매 완료 · 새 봉투 준비" if result.sold else "판매할 수 없는 봉투입니다"
 		else:
 			bag_hint.text = "영역 밖 · 봉투를 돌려놓았습니다"
 	_finish_if_needed()
 	_render(now)
+
+func _show_sales_feedback(qualities: Array, amount: int, now: int) -> void:
+	var reaction := "맛있다!"
+	var burnt: int = qualities.count(Mold.Quality.BURNT)
+	if qualities.count(Mold.Quality.DELICIOUS) == 3:
+		reaction = "최고야!"
+	elif burnt == 1:
+		reaction = "좀 탔는데?"
+	elif burnt >= 2:
+		reaction = "맛없어!"
+	var number := str(amount)
+	var separator := number.length() - 3
+	while separator > 0:
+		number = number.insert(separator, ",")
+		separator -= 3
+	# One label and one monotonic deadline keep amount/reaction synchronized.
+	# A new sale replaces both text and expiry; no old timer can hide it early.
+	sales_feedback.text = "+%s원\n%s" % [number, reaction]
+	sales_feedback_until = now + SALES_FEEDBACK_USEC
+
+func _clear_sales_feedback() -> void:
+	sales_feedback_until = 0
+	sales_feedback.text = ""
+	sales_feedback.hide()
 
 func _cancel_bag_drag() -> void:
 	if dragging:
@@ -340,6 +380,10 @@ func _input(event: InputEvent) -> void:
 		_render(now)
 
 func _render(now: int) -> void:
+	if not session.running or now >= sales_feedback_until:
+		_clear_sales_feedback()
+	sales_feedback.visible = session.running and sales_feedback_until > now
+	bag_hint.visible = not sales_feedback.visible
 	# Display only: a positive remainder must never round down to 00.0.
 	var remaining_usec: int = session.remaining_usec(now) if has_started else Session.DURATION_USEC
 	var remaining: float = ceili(remaining_usec / 100_000.0) / 10.0
