@@ -6,13 +6,24 @@ enum State { EMPTY, FIRST_BATTER, FILLING_ADDED, SIDE_1, SIDE_2, READY, BURNT }
 enum SideQuality { COOKING, PERFECT, NORMAL, BURNT }
 enum Quality { NONE, DELICIOUS, NORMAL, BURNT }
 
-# Confirmed normal -> perfect -> burnt timing (Notion 13.3).
-const FIRST_MIN_USEC := 5_000_000
-const FIRST_NORMAL_END_USEC := 7_000_000
-const FIRST_BURN_AFTER_USEC := 9_000_000
-const SECOND_MIN_USEC := 3_000_000
-const SECOND_NORMAL_END_USEC := 4_500_000
-const SECOND_BURN_AFTER_USEC := 6_000_000
+enum Difficulty { NORMAL, EASY }
+# Per mode: first and second side [minimum, normal end, burn after], microseconds.
+const TIMINGS := [
+	[[5_000_000, 7_000_000, 9_000_000], [3_000_000, 4_500_000, 6_000_000]],
+	[[5_000_000, 8_000_000, 12_000_000], [3_000_000, 5_000_000, 8_000_000]],
+]
+var _difficulty: Difficulty
+var difficulty: Difficulty:
+	get: return _difficulty
+
+func _init(mode: Difficulty = Difficulty.NORMAL) -> void:
+	_difficulty = Difficulty.EASY if mode == Difficulty.EASY else Difficulty.NORMAL
+
+static func timing(first: bool, mode: Difficulty = Difficulty.NORMAL) -> Array:
+	return TIMINGS[Difficulty.EASY if mode == Difficulty.EASY else Difficulty.NORMAL][0 if first else 1]
+
+static func difficulty_name(mode: Difficulty) -> String:
+	return "이지" if mode == Difficulty.EASY else "일반"
 
 var state: State = State.EMPTY
 var side_started_at: int = 0
@@ -22,11 +33,13 @@ var first_quality: SideQuality = SideQuality.COOKING
 var second_quality: SideQuality = SideQuality.COOKING
 var quality: Quality = Quality.NONE
 
-static func first_quality_at(elapsed_usec: int) -> SideQuality:
-	return _quality_at(elapsed_usec, FIRST_MIN_USEC, FIRST_NORMAL_END_USEC, FIRST_BURN_AFTER_USEC)
+static func first_quality_at(elapsed_usec: int, mode: Difficulty = Difficulty.NORMAL) -> SideQuality:
+	var limits := timing(true, mode)
+	return _quality_at(elapsed_usec, limits[0], limits[1], limits[2])
 
-static func second_quality_at(elapsed_usec: int) -> SideQuality:
-	return _quality_at(elapsed_usec, SECOND_MIN_USEC, SECOND_NORMAL_END_USEC, SECOND_BURN_AFTER_USEC)
+static func second_quality_at(elapsed_usec: int, mode: Difficulty = Difficulty.NORMAL) -> SideQuality:
+	var limits := timing(false, mode)
+	return _quality_at(elapsed_usec, limits[0], limits[1], limits[2])
 
 static func _quality_at(elapsed_usec: int, minimum: int, normal_end: int, burn_after: int) -> SideQuality:
 	if elapsed_usec < minimum:
@@ -44,12 +57,12 @@ func _on_first_side() -> bool:
 	return state in [State.FIRST_BATTER, State.FILLING_ADDED, State.SIDE_1]
 
 func advance(now: int) -> void:
-	if _on_first_side() and first_quality_at(elapsed_at(now)) == SideQuality.BURNT:
+	if _on_first_side() and first_quality_at(elapsed_at(now), difficulty) == SideQuality.BURNT:
 		first_quality = SideQuality.BURNT
 		state = State.BURNT
 		quality = Quality.BURNT
 	elif state in [State.SIDE_2, State.READY]:
-		second_quality = second_quality_at(elapsed_at(now))
+		second_quality = second_quality_at(elapsed_at(now), difficulty)
 		if second_quality == SideQuality.BURNT:
 			state = State.BURNT
 			quality = Quality.BURNT
@@ -79,7 +92,7 @@ func flip(now: int) -> bool:
 	advance(now)
 	if state != State.SIDE_1:
 		return false
-	var judged := first_quality_at(elapsed_at(now))
+	var judged := first_quality_at(elapsed_at(now), difficulty)
 	if judged == SideQuality.COOKING:
 		return false
 	first_quality = judged

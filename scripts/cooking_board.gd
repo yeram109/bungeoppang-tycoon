@@ -1,18 +1,23 @@
 extends RefCounted
-## Six independent G001 molds; not connected to the existing three-mold UI.
+## Six independent molds, all using the round's fixed difficulty.
 ## An action returns true only when its ingredient/flip was accepted.
 ## Time still advances on rejected actions, including invalid mold indexes.
 const Mold = preload("res://scripts/cooking_mold.gd")
 const MOLD_COUNT := 6
 var molds: Array = []
 
-func _init() -> void:
+var _difficulty: Mold.Difficulty
+var difficulty: Mold.Difficulty:
+	get: return _difficulty
+
+func _init(mode: Mold.Difficulty = Mold.Difficulty.NORMAL) -> void:
+	_difficulty = mode
 	reset()
 
 func reset() -> void:
 	molds.clear()
 	for index in MOLD_COUNT:
-		molds.append(Mold.new())
+		molds.append(Mold.new(difficulty))
 
 func advance(now: int) -> void:
 	for mold in molds:

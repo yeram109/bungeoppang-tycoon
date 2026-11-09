@@ -40,8 +40,8 @@ func render(mold: RefCounted, index: int, now: int, active: bool, message: Strin
 	title_label.text = "틀 %d" % (index + 1)
 	cook_button.disabled = not active
 	var first: bool = mold.state in [Mold.State.FIRST_BATTER, Mold.State.FILLING_ADDED, Mold.State.SIDE_1] or (mold.state == Mold.State.BURNT and mold.first_quality == Mold.SideQuality.BURNT)
-	var quality: int = Mold.first_quality_at(mold.elapsed_at(now)) if first else mold.second_quality
-	progress.max_value = 9.0 if first else 6.0
+	var quality: int = Mold.first_quality_at(mold.elapsed_at(now), mold.difficulty) if first else mold.second_quality
+	progress.max_value = Mold.timing(first, mold.difficulty)[2] / 1_000_000.0
 	progress.value = mold.elapsed_at(now) / 1_000_000.0
 	var phase := "1면" if first else "2면"
 	var hint := ""
@@ -60,7 +60,7 @@ func render(mold: RefCounted, index: int, now: int, active: bool, message: Strin
 			Mold.State.READY: hint = "맛있는 붕어빵" if mold.quality == Mold.Quality.DELICIOUS else "일반 붕어빵"
 			Mold.State.BURNT: hint = "탄 붕어빵 · 틀에 남음"
 		cook_button.text = "%s · %s\n%s" % [phase, quality_text, hint]
-		hint = "계속 조리 중 · 클릭 수거 · 도구 유지" if mold.state == Mold.State.READY else ("클릭 수거 · 도구 유지" if mold.state == Mold.State.BURNT else "일반 → 완벽 → 탐 · %d초 초과 탐" % (9 if first else 6))
+		hint = "계속 조리 중 · 클릭 수거 · 도구 유지" if mold.state == Mold.State.READY else ("클릭 수거 · 도구 유지" if mold.state == Mold.State.BURNT else "일반 → 완벽 → 탐 · %d초 초과 탐" % int(progress.max_value))
 	feedback_label.text = message if not message.is_empty() else hint
 	feedback_label.modulate = Color("ffb4a0") if not message.is_empty() else Color.WHITE
 	button_style.bg_color = color

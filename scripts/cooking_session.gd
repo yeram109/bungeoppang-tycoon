@@ -9,6 +9,8 @@ const PREPARATION_USEC := 3_000_000
 const MOLD_COUNT := Board.MOLD_COUNT
 enum Tool { NONE, BATTER, FILLING }
 var board = Board.new()
+var difficulty: Mold.Difficulty:
+	get: return board.difficulty
 var bag = Bag.new()
 var revenue := 0
 var preparing := false
@@ -31,15 +33,18 @@ func _clear() -> void:
 	feedback_at.assign([0, 0, 0, 0, 0, 0])
 
 # start begins active play; prepare is the user-facing entry point.
-func start(now: int) -> void:
+func start(now: int, mode: int = -1) -> void:
+	# Omitted mode preserves the last round, including every replacement mold.
+	if mode in [Mold.Difficulty.NORMAL, Mold.Difficulty.EASY]:
+		board = Board.new(mode)
 	_clear()
 	preparing = false
 	revenue = 0
 	started_at = now
 	running = true
 
-func prepare(now: int) -> void:
-	start(now + PREPARATION_USEC)
+func prepare(now: int, mode: int = -1) -> void:
+	start(now + PREPARATION_USEC, mode)
 	running = false
 	preparing = true
 
@@ -85,7 +90,7 @@ func collect(index: int, now: int) -> bool:
 	if not bag.try_add(mold.quality):
 		return false
 	# Consume only after the bag accepted the immutable quality value.
-	board.molds[index] = Mold.new()
+	board.molds[index] = Mold.new(difficulty)
 	feedback[index] = ""
 	feedback_at[index] = 0
 	return true
