@@ -120,7 +120,7 @@ func test_ui(mode: int) -> void:
 	main.difficulty_select.item_selected.emit(mode)
 	await process_frame
 	check(main.help.text.contains("[이지]" if mode == D.EASY else "[일반]") and main.help.text.contains("5~8초" if mode == D.EASY else "5~7초"), "selection updates actual timing guide")
-	check(main.leaderboard_panel.visible == (mode == D.NORMAL), "easy does not present normal ranking as its own")
+	check(main.leaderboard_panel.visible and main.ranking_title.text.begins_with(Mold.difficulty_name(mode)), "both modes display their own ranking")
 	main.action_button.pressed.emit()
 	var started: int = main.session.started_at
 	check(main.session.difficulty == mode and main.session.preparing and not main.difficulty_select.visible, "round captures choice and hides selector")
@@ -149,8 +149,8 @@ func test_ui(mode: int) -> void:
 	main._process(0)
 	check(main.result_label.text.contains("2000원") and main.action_button.visible, "both modes show actual final revenue")
 	if mode == D.EASY:
-		check(main.save_label.text == "이지 모드 기록 미저장" and not main.leaderboard_panel.visible, "easy result clearly unsaved")
-		check(FileAccess.get_file_as_string(path) == original and main.ranking.next_order == 1 and not FileAccess.file_exists(path + ".tmp"), "easy leaves normal ranking bytes and memory unchanged")
+		check(main.save_label.text == "기록 저장 완료" and main.leaderboard_panel.visible and main.ranking.records[0].score == 2000, "easy result saved to its own ranking")
+		check(FileAccess.get_file_as_string(path) == original and main.normal_ranking.next_order == 1 and not FileAccess.file_exists(path + ".tmp"), "easy leaves normal ranking bytes and memory unchanged")
 	else:
 		check(main.save_label.text == "기록 저장 완료" and main.ranking.next_order == 2 and main.ranking.records[0].score == 2000, "normal still stores earned revenue")
 	var saved := FileAccess.get_file_as_string(path)
@@ -163,7 +163,7 @@ func test_ui(mode: int) -> void:
 	main.session.advance(main.session.started_at + Session.DURATION_USEC)
 	main._finish_if_needed()
 	if mode == D.EASY:
-		check(FileAccess.get_file_as_string(path) == original, "easy repeat zero result remains unsaved")
+		check(FileAccess.get_file_as_string(path) == original, "easy repeat zero result never changes normal ranking")
 	main.back_button.pressed.emit()
 	check(main.save_label.text.is_empty(), "lobby clears prior round save status before changing mode")
 	main.difficulty_select.select(1 - mode)
@@ -184,6 +184,6 @@ func test_ui(mode: int) -> void:
 		main.action_button.pressed.emit()
 		main.session.advance(main.session.started_at + Session.DURATION_USEC)
 		main._finish_if_needed()
-		check(not FileAccess.file_exists(path) and not FileAccess.file_exists(path + ".tmp"), "first easy game creates no ranking file")
+		check(not FileAccess.file_exists(path) and not FileAccess.file_exists(path + ".tmp"), "first easy game creates no normal ranking file")
 		main.queue_free()
 		await process_frame

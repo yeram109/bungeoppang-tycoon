@@ -3,7 +3,12 @@ const Session = preload("res://scripts/cooking_session.gd")
 const MoldScene = preload("res://scenes/cooking_mold.tscn")
 const RankingStore = preload("res://scripts/ranking_store.gd")
 var ranking_path := "user://rankings.json"
+# Empty override derives a sibling path, so tests overriding ranking_path stay isolated.
+var easy_ranking_path := ""
+var normal_ranking: RefCounted
+var easy_ranking: RefCounted
 var ranking: RefCounted
+var ranking_title: Label
 var player_nickname := ""
 var result_recorded := false
 var preparation_label: Label
@@ -46,8 +51,11 @@ var dragged_bag_id := -1
 
 
 func _ready() -> void:
-	ranking = RankingStore.new(ranking_path)
-	ranking.load_records()
+	normal_ranking = RankingStore.new(ranking_path)
+	easy_ranking = RankingStore.new(easy_ranking_path if not easy_ranking_path.is_empty() else ranking_path.get_basename() + "_easy.json")
+	normal_ranking.load_records()
+	easy_ranking.load_records()
+	ranking = normal_ranking
 	var margin := MarginContainer.new()
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	for edge in ["left", "right", "top", "bottom"]:
@@ -94,7 +102,7 @@ func _ready() -> void:
 		nickname_row.add_child(edit_nickname)
 	difficulty_select = OptionButton.new()
 	difficulty_select.add_item("일반 · 원화 랭킹 저장", Mold.Difficulty.NORMAL)
-	difficulty_select.add_item("이지 · 기록 미저장", Mold.Difficulty.EASY)
+	difficulty_select.add_item("이지 · 원화 랭킹 저장", Mold.Difficulty.EASY)
 	difficulty_select.item_selected.connect(func(_index: int): _render(Time.get_ticks_usec()))
 	column.add_child(difficulty_select)
 	validation_label = Label.new()
@@ -187,7 +195,7 @@ func _ready() -> void:
 	leaderboard_panel = VBoxContainer.new()
 	leaderboard_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	column.add_child(leaderboard_panel)
-	var ranking_title := Label.new()
+	ranking_title = Label.new()
 	ranking_title.text = "일반 모드 · 판매 금액 TOP 10 (원)"
 	leaderboard_panel.add_child(ranking_title)
 	var scroll := ScrollContainer.new()
@@ -399,7 +407,7 @@ func _input(event: InputEvent) -> void:
 
 func _render(now: int) -> void:
 	var mode: int = session.difficulty if has_started else difficulty_select.get_selected_id()
-	var easy: bool = mode == Mold.Difficulty.EASY
+	_use_ranking(mode)
 	var first := Mold.timing(true, mode)
 	var second := Mold.timing(false, mode)
 	help.text = "[%s] 주전자 반죽 → 주걱 팥 → 주전자 반죽 → 도구 보유 중에도 뒤집기·수거\n첫 면 5~%s초 일반 / %s초 초과~%s초 완벽 · 두 번째 면 3~%s초 일반 / %s초 초과~%s초 완벽" % [
@@ -427,8 +435,6 @@ func _render(now: int) -> void:
 		var message: String = session.feedback[index] if now - session.feedback_at[index] < 1_200_000 else ""
 		mold_views[index].render(session.molds[index], index, display_time, session.running, message)
 	result_label.text = "%s 님 · 시간 종료!\n총 판매 금액 %d원 · 최고 판매 금액 %d원" % [player_nickname, session.revenue, ranking.best_score()] if ended else "3초 준비 후 90초 동안 굽기 → 수거 → 3개 봉투 판매를 진행하세요."
-	if easy:
-		result_label.text = "%s 님 · 이지 시간 종료!\n총 판매 금액 %d원" % [player_nickname, session.revenue] if ended else "이지 · 3초 준비 후 90초 플레이 · 기록은 저장하지 않습니다."
 	result_label.visible = not session.running and not session.preparing
 	preparation_label.visible = session.preparing
 	preparation_label.text = str(session.preparation_number(now)) if session.preparing else ""
@@ -457,7 +463,7 @@ func _render(now: int) -> void:
 	nickname_row.visible = not has_started
 	validation_label.visible = not has_started and not validation_label.text.is_empty()
 	mold_row.visible = session.running or session.preparing
-	leaderboard_panel.visible = not session.running and not session.preparing and not easy
+	leaderboard_panel.visible = not session.running and not session.preparing
 	save_label.visible = not session.running and not session.preparing and not save_label.text.is_empty()
 	back_button.visible = ended
 
@@ -467,9 +473,7 @@ func _finish_if_needed() -> void:
 	# Mark the attempt before writing: repeated end/frame/UI events cannot save twice.
 	_cancel_bag_drag()
 	result_recorded = true
-	if session.difficulty == Mold.Difficulty.EASY:
-		save_label.text = "이지 모드 기록 미저장"
-		return
+	_use_ranking(session.difficulty)
 	var saved: bool = ranking.add_result(player_nickname, session.revenue, int(Time.get_unix_time_from_system() * 1000))
 	save_label.text = "기록 저장 완료" if saved else "기록 저장 실패: " + ranking.last_error
 	_refresh_rankings()
@@ -482,7 +486,17 @@ func _show_start() -> void:
 	save_label.text = ""
 	_render(Time.get_ticks_usec())
 
+func _use_ranking(mode: int) -> void:
+	var target: RefCounted = easy_ranking if mode == Mold.Difficulty.EASY else normal_ranking
+	if ranking == target:
+		return
+	ranking = target
+	save_label.text = ranking.load_message
+	_refresh_rankings()
+
 func _refresh_rankings() -> void:
+	var mode: int = Mold.Difficulty.EASY if ranking == easy_ranking else Mold.Difficulty.NORMAL
+	ranking_title.text = "%s 모드 · 판매 금액 TOP 10 (원) · 최고 %d원" % [Mold.difficulty_name(mode), ranking.best_score()]
 	for child in leaderboard_rows.get_children():
 		leaderboard_rows.remove_child(child)
 		child.queue_free()
