@@ -124,7 +124,9 @@ func test_deadline() -> void:
 
 func test_scene() -> void:
 	var main = load("res://scenes/main.tscn").instantiate()
+	main.ranking_path = _isolated_ranking_path()
 	root.add_child(main)
+	main.nickname_input.text = "회귀검사"
 	await process_frame
 	check(main.mold_views.size() == 3 and main.action_button.visible, "scene shows three molds and start")
 	for view in main.mold_views:
@@ -150,6 +152,7 @@ func test_display_boundaries() -> void:
 	# Exercise the real scene's render methods and resulting controls, not a
 	# duplicate formatter. Disable frame updates so injected microseconds stay exact.
 	var main = load("res://scenes/main.tscn").instantiate()
+	main.ranking_path = _isolated_ranking_path()
 	root.add_child(main)
 	main.set_process(false)
 	main.has_started = true
@@ -212,3 +215,8 @@ func test_display_boundaries() -> void:
 			check(main.session.click_mold(0, sample[0]) == (100 if sample[2] else 0), "countdown does not change sale/deadline judgment")
 	main.queue_free()
 	await process_frame
+
+func _isolated_ranking_path() -> String:
+	var directory := "res://.tools/test-data/core-%d-%d" % [OS.get_process_id(), Time.get_ticks_usec()]
+	DirAccess.make_dir_recursive_absolute(directory)
+	return directory.path_join("rankings.json")
