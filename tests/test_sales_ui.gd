@@ -93,15 +93,45 @@ func run() -> void:
 		main.click_mold_at(0, 7_000_000 + elapsed)
 		var expected: int = Mold.Quality.DELICIOUS if elapsed <= 4_500_000 else (Mold.Quality.NORMAL if elapsed <= 6_000_000 else Mold.Quality.BURNT)
 		check(main.session.bag.items == [expected], "click refreshes quality boundary")
-	main.session.start(0)
-	cook(main, 0, Mold.Quality.DELICIOUS, 10_000_000)
-	main.session.select_tool(main.Session.Tool.BATTER, 10_000_000)
-	main.click_mold_at(0, 10_000_000)
-	check(main.session.bag.items.is_empty() and main.session.molds[0].state == Mold.State.READY, "held tool cannot collect through UI")
-	check(main.session.selected_tool == main.Session.Tool.BATTER and main.mold_views[0].feedback_label.text.contains("해제"), "held tool stays selected with guidance")
-	main.session.cancel_tool(10_000_000)
-	main.click_mold_at(0, 10_000_000)
-	check(main.session.bag.items == [Mold.Quality.DELICIOUS], "deselect permits collection")
+	for tool in [main.Session.Tool.NONE, main.Session.Tool.BATTER, main.Session.Tool.FILLING]:
+		for quality in [Mold.Quality.DELICIOUS, Mold.Quality.NORMAL, Mold.Quality.BURNT]:
+			main.session.start(0)
+			for index in 4:
+				cook(main, index, quality, 10_000_000)
+			if tool != main.Session.Tool.NONE:
+				main.session.select_tool(tool, 10_000_000)
+			for index in 3:
+				main.click_mold_at(index, 10_000_000)
+				check(main.session.selected_tool == tool, "collection retains selected tool")
+				check(main.session.bag.items.size() == index + 1 and main.session.bag.items[index] == quality, "one click transfers exactly one quality")
+				check(main.session.molds[index].state == Mold.State.EMPTY, "collection does not also insert batter")
+				check(main.tool_cursor.visible == (tool != main.Session.Tool.NONE), "collection cursor matches selected tool")
+			var original = main.session.molds[3]
+			var items: Array = main.session.bag.items
+			var full_bag_id: int = main.session.bag.id
+			main.click_mold_at(3, 10_000_000)
+			check(main.session.molds[3] == original and main.session.bag.items == items and main.session.bag.id == full_bag_id, "full bag preserves mold and bag")
+			check(main.session.selected_tool == tool and main.mold_views[3].feedback_label.text.contains("가득"), "full bag preserves tool and guides player")
+		# Time update can turn SIDE_1 into BURNT before routing this click.
+		main.session.start(0)
+		main.session.board.add_batter(0, 0)
+		main.session.board.add_filling(0, 1)
+		main.session.board.add_batter(0, 2)
+		if tool != main.Session.Tool.NONE:
+			main.session.select_tool(tool, 3)
+		main.click_mold_at(0, 4_999_999)
+		check(main.session.molds[0].state == Mold.State.SIDE_1 and main.session.selected_tool == tool and main.session.bag.items.is_empty(), "early click preserves recipe tool and bag")
+		main.click_mold_at(0, 9_000_001)
+		check(main.session.bag.items == [Mold.Quality.BURNT] and main.session.molds[0].state == Mold.State.EMPTY and main.session.selected_tool == tool, "time refresh routes newly burnt bread to collection")
+		for offset in [-1, 0, 1]:
+			main.session.start(0)
+			main.result_recorded = false
+			cook(main, 0, Mold.Quality.BURNT, 10_000_000)
+			if tool != main.Session.Tool.NONE:
+				main.session.select_tool(tool, 10_000_000)
+			main.click_mold_at(0, 60_000_000 + offset)
+			check(main.session.bag.items == ([Mold.Quality.BURNT] if offset < 0 else []), "collection respects deadline with every tool")
+			check(main.session.selected_tool == (tool if offset < 0 else main.Session.Tool.NONE), "deadline cleanup wins over tool preservation")
 	# Consecutive sales accumulate once; an old drag token cannot sell a refilled bag.
 	main.session.start(0)
 	for sale_index in 2:

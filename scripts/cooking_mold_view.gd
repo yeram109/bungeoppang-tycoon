@@ -58,7 +58,7 @@ func render(mold: RefCounted, index: int, now: int, active: bool, message: Strin
 			Mold.State.READY: hint = "맛있는 붕어빵" if mold.quality == Mold.Quality.DELICIOUS else "일반 붕어빵"
 			Mold.State.BURNT: hint = "탄 붕어빵 · 틀에 남음"
 		cook_button.text = "%s · %s\n%s" % [phase, quality_text, hint]
-		hint = "계속 조리 중 · 도구 없이 클릭 수거" if mold.state == Mold.State.READY else ("도구 없이 클릭 수거" if mold.state == Mold.State.BURNT else "첫 면 5~7초 / 두 번째 면 3~4.5초 완벽")
+		hint = "계속 조리 중 · 클릭 수거 · 도구 유지" if mold.state == Mold.State.READY else ("클릭 수거 · 도구 유지" if mold.state == Mold.State.BURNT else "첫 면 5~7초 / 두 번째 면 3~4.5초 완벽")
 	feedback_label.text = message if not message.is_empty() else hint
 	feedback_label.modulate = Color("ffb4a0") if not message.is_empty() else Color.WHITE
 	button_style.bg_color = color

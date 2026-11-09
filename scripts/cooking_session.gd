@@ -60,7 +60,7 @@ func cancel_tool(now: int) -> void:
 func collect(index: int, now: int) -> bool:
 	# Time/expiry can change food quality even if collection is rejected.
 	advance(now)
-	if not running or selected_tool != Tool.NONE or index < 0 or index >= MOLD_COUNT:
+	if not running or index < 0 or index >= MOLD_COUNT:
 		return false
 	var mold = molds[index]
 	if mold.state not in [Mold.State.READY, Mold.State.BURNT]:
