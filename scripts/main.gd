@@ -28,6 +28,16 @@ var status_label: Label
 var action_button: Button
 var result_label: Label
 var has_started := false
+const Mold = preload("res://scripts/cooking_mold.gd")
+var sales_row: HBoxContainer
+var bag_button: Button
+var sale_zone: PanelContainer
+var bag_hint: Label
+var revenue_label: Label
+var drag_preview: Label
+var dragging := false
+var dragged_bag_id := -1
+
 
 func _ready() -> void:
 	ranking = RankingStore.new(ranking_path)
@@ -50,6 +60,9 @@ func _ready() -> void:
 	status_label = Label.new()
 	status_label.add_theme_font_size_override("font_size", 22)
 	header.add_child(status_label)
+	revenue_label = Label.new()
+	revenue_label.add_theme_font_size_override("font_size", 20)
+	header.add_child(revenue_label)
 	var help := Label.new()
 	help.text = "주전자 반죽 → 주걱 팥 → 주전자 반죽 → 도구 없이 뒤집기\n첫 면 5~7초 완벽 / 9초 초과 탐 · 두 번째 면 3~4.5초 완벽 / 6초 초과 탐"
 	help.add_theme_font_size_override("font_size", 16)
@@ -118,6 +131,37 @@ func _ready() -> void:
 		row.add_child(view)
 		view.mold_clicked.connect(_on_mold_clicked.bind(index))
 		mold_views.append(view)
+	sales_row = HBoxContainer.new()
+	column.add_child(sales_row)
+	bag_button = Button.new()
+	bag_button.focus_mode = Control.FOCUS_NONE
+	bag_button.custom_minimum_size = Vector2(300, 64)
+	bag_button.gui_input.connect(_on_bag_input)
+	sales_row.add_child(bag_button)
+	bag_hint = Label.new()
+	bag_hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bag_hint.add_theme_font_size_override("font_size", 14)
+	sales_row.add_child(bag_hint)
+	sale_zone = PanelContainer.new()
+	sale_zone.custom_minimum_size = Vector2(210, 64)
+	var zone_style := StyleBoxFlat.new()
+	zone_style.bg_color = Color("35594b")
+	zone_style.set_corner_radius_all(8)
+	sale_zone.add_theme_stylebox_override("panel", zone_style)
+	var zone_label := Label.new()
+	zone_label.text = "판매 영역\n3개 봉투를 여기에 놓기"
+	zone_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	zone_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sale_zone.add_child(zone_label)
+	sales_row.add_child(sale_zone)
+	drag_preview = Label.new()
+	drag_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	drag_preview.z_index = 101
+	drag_preview.add_theme_color_override("font_color", Color("ffe2a5"))
+	drag_preview.add_theme_color_override("font_outline_color", Color.BLACK)
+	drag_preview.add_theme_constant_override("outline_size", 6)
+	add_child(drag_preview)
+	get_window().focus_exited.connect(_cancel_bag_drag)
 	result_label = Label.new()
 	result_label.add_theme_font_size_override("font_size", 22)
 	column.add_child(result_label)
@@ -208,6 +252,8 @@ func _start_round() -> void:
 	save_label.text = ""
 	result_recorded = false
 	has_started = true
+	_cancel_bag_drag()
+	bag_hint.text = "3개를 모아 판매 영역으로\n취소: Esc / 우클릭"
 	session.start(Time.get_ticks_usec())
 	_render(Time.get_ticks_usec())
 
@@ -218,20 +264,79 @@ func _process(_delta: float) -> void:
 	_render(now)
 
 func _on_mold_clicked(index: int) -> void:
-	var now := Time.get_ticks_usec()
-	session.click_mold(index, now)
+	click_mold_at(index, Time.get_ticks_usec())
+
+# UI routing takes an explicit monotonic timestamp for boundary regression tests.
+func click_mold_at(index: int, now: int) -> void:
+	session.advance(now)
+	if not dragging and session.running and index >= 0 and index < Session.MOLD_COUNT:
+		var collectible: bool = session.molds[index].state in [Mold.State.READY, Mold.State.BURNT]
+		if collectible and session.selected_tool == Session.Tool.NONE:
+			var collected: bool = session.collect(index, now)
+			session.feedback[index] = "봉투에 수거 완료" if collected else "봉투가 가득 찼습니다 · 먼저 판매하세요"
+			session.feedback_at[index] = now
+		else:
+			session.click_mold(index, now)
+			if collectible:
+				session.feedback[index] = "도구를 해제한 뒤 수거하세요"
 	_finish_if_needed()
 	_render(now)
 
 func _on_tool_pressed(tool: Session.Tool) -> void:
 	var now := Time.get_ticks_usec()
-	session.select_tool(tool, now)
+	if not dragging:
+		session.select_tool(tool, now)
 	_finish_if_needed()
 	_render(now)
 
+func _on_bag_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		begin_bag_drag(Time.get_ticks_usec())
+		bag_button.accept_event()
+
+func begin_bag_drag(now: int) -> void:
+	session.advance(now)
+	if session.running and not dragging:
+		if session.bag.items.size() == 3:
+			dragging = true
+			dragged_bag_id = session.bag.id
+			bag_hint.text = "판매 영역에 놓으세요\n취소: Esc / 우클릭"
+		else:
+			bag_hint.text = "3개를 모아야 판매할 수 있습니다"
+	_finish_if_needed()
+	_render(now)
+
+func drop_bag_at(point: Vector2, now: int) -> void:
+	var was_dragging := dragging
+	var token := dragged_bag_id
+	_cancel_bag_drag()
+	session.advance(now)
+	if was_dragging and session.running:
+		if sale_zone.get_global_rect().has_point(point):
+			var result: Dictionary = session.sell_bag(token, now)
+			bag_hint.text = "판매 완료 · 새 봉투 준비" if result.sold else "판매할 수 없는 봉투입니다"
+		else:
+			bag_hint.text = "영역 밖 · 봉투를 돌려놓았습니다"
+	_finish_if_needed()
+	_render(now)
+
+func _cancel_bag_drag() -> void:
+	if dragging:
+		bag_hint.text = "드래그 취소 · 내용은 유지됩니다"
+	dragging = false
+	dragged_bag_id = -1
+	if is_instance_valid(drag_preview):
+		drag_preview.hide()
+
 func _input(event: InputEvent) -> void:
+	if dragging:
+		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+			_cancel_bag_drag()
+		elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
+			drop_bag_at(get_global_mouse_position(), Time.get_ticks_usec())
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
 		var now := Time.get_ticks_usec()
+		_cancel_bag_drag()
 		session.cancel_tool(now)
 		_finish_if_needed()
 		_render(now)
@@ -247,17 +352,28 @@ func _render(now: int) -> void:
 	for index in mold_views.size():
 		var message: String = session.feedback[index] if now - session.feedback_at[index] < 1_200_000 else ""
 		mold_views[index].render(session.molds[index], index, display_time, session.running, message)
-	result_label.text = "%s 님 · 시간 종료!\n조리 연습 완료 · 판매 및 기록 저장은 지원하지 않습니다." % player_nickname if ended else "60초 조리 연습 · 수거·판매 없이 굽기만 진행합니다."
+	result_label.text = "%s 님 · 시간 종료!\n총 판매 금액 %d원" % [player_nickname, session.revenue] if ended else "60초 동안 굽고 수거해 3개 봉투를 드래그하여 판매하세요."
 	result_label.visible = not session.running
 	tool_row.visible = session.running
 	batter_button.set_pressed_no_signal(session.selected_tool == Session.Tool.BATTER)
 	filling_button.set_pressed_no_signal(session.selected_tool == Session.Tool.FILLING)
 	batter_button.disabled = not session.running
 	filling_button.disabled = not session.running
-	tool_status.text = "도구 없음 · 뒤집기 가능" if session.selected_tool == Session.Tool.NONE else "같은 도구 / 우클릭으로 해제"
+	tool_status.text = "도구 없음 · 뒤집기 / 수거" if session.selected_tool == Session.Tool.NONE else "같은 도구 / 우클릭으로 해제"
 	tool_cursor.text = "▰ 주전자 · 반죽" if session.selected_tool == Session.Tool.BATTER else "▱ 주걱 · 팥"
-	tool_cursor.visible = session.running and session.selected_tool != Session.Tool.NONE
+	tool_cursor.visible = session.running and session.selected_tool != Session.Tool.NONE and not dragging
 	tool_cursor.position = (get_local_mouse_position() + Vector2(18, 18)).clamp(Vector2.ZERO, (size - tool_cursor.size).max(Vector2.ZERO))
+	sales_row.visible = session.running
+	revenue_label.visible = has_started
+	revenue_label.text = "수익 %d원" % session.revenue
+	var contents: PackedStringArray = []
+	for quality in session.bag.items:
+		contents.append({Mold.Quality.DELICIOUS: "맛있는", Mold.Quality.NORMAL: "일반", Mold.Quality.BURNT: "탄"}[quality])
+	bag_button.text = "종이봉투 %d/3\n%s" % [contents.size(), " · ".join(contents) if not contents.is_empty() else "빈 봉투"]
+	bag_button.modulate.a = 0.45 if dragging else 1.0
+	drag_preview.text = bag_button.text
+	drag_preview.visible = dragging and session.running
+	drag_preview.position = (get_local_mouse_position() + Vector2(18, 18)).clamp(Vector2.ZERO, (size - drag_preview.size).max(Vector2.ZERO))
 	action_button.visible = not session.running
 	action_button.text = "다시 하기" if ended else "게임 시작"
 	nickname_row.visible = not has_started
@@ -270,9 +386,10 @@ func _render(now: int) -> void:
 func _finish_if_needed() -> void:
 	if not has_started or session.running or result_recorded:
 		return
-	# G001-B has no sales. Never append a zero score or rewrite legacy rankings.
+	# Currency rankings are deferred to G003; preserve legacy score records.
+	_cancel_bag_drag()
 	result_recorded = true
-	save_label.text = "이번 연습은 랭킹에 저장하지 않습니다. 기존 기록은 유지됩니다."
+	save_label.text = "이번 수익은 랭킹에 저장하지 않습니다. 기존 기록은 유지됩니다."
 
 func _show_start() -> void:
 	if session.running:
