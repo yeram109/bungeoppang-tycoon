@@ -1,0 +1,13 @@
+# Godot generated cache and editor-local data
+.godot/
+export_credentials.cfg
+
+# Portable editor, downloads, logs, and build output
+.tools/
+build/
+dist/
+*.log
+
+# Operating system files
+Thumbs.db
+.DS_Store
