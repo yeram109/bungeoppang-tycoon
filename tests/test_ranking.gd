@@ -31,6 +31,7 @@ func run() -> void:
 	test_corruption()
 	test_io_failures()
 	await test_ui()
+	await test_nickname_cancel()
 	print("F002 TESTS: %d checks, %d failures" % [checks, failures])
 	quit(1 if failures else 0)
 
@@ -39,6 +40,44 @@ func test_names() -> void:
 		check(not Store.nickname_error(name).is_empty(), "reject invalid nickname")
 	for name in ["한글", "ABC", "123", "한글ABC123", "  장인  ", "가나다라마바사아자차카타", "123456789012", "a"]:
 		check(Store.nickname_error(name).is_empty(), "accept valid nickname " + name)
+
+func test_nickname_cancel() -> void:
+	var main = make_main(path_for("nickname-cancel"))
+	main._stage_nickname("붕어빵장인")
+	await process_frame
+	check(main.nickname_confirmation.visible and main.nickname_input.text.is_empty(), "draft does not change empty nickname")
+	main.action_button.pressed.emit()
+	check(not main.session.running, "cannot start while confirmation pending")
+	main.nickname_confirmation.canceled.emit()
+	check(main.nickname_input.text.is_empty() and not main.nickname_pending and not main.nickname_confirmation.visible, "cancel returns to empty start screen")
+	main._stage_nickname("  붕어빵장인  ")
+	await process_frame
+	main.nickname_confirmation.confirmed.emit()
+	check(main.nickname_input.text == "붕어빵장인" and not main.nickname_pending, "confirm after cancel applies trimmed Korean name")
+	for draft in ["겨울장인", "", "   ", "가나다라마바사아자차카타파"]:
+		main._stage_nickname(draft)
+		await process_frame
+		main.nickname_confirmation.canceled.emit()
+		check(main.nickname_input.text == "붕어빵장인" and main.validation_label.text.is_empty(), "cancel changed draft preserves nickname and validation")
+	main.nickname_confirmation.confirmed.emit()
+	check(main.nickname_input.text == "붕어빵장인", "stale confirmation after cancel cannot apply draft")
+	for invalid in ["", "   ", "가나다라마바사아자차카타파"]:
+		main._stage_nickname(invalid)
+		await process_frame
+		main.nickname_confirmation.confirmed.emit()
+		main.action_button.pressed.emit()
+		check(not main.session.running and not main.validation_label.text.is_empty(), "confirmed invalid draft still blocks start")
+	main._stage_nickname("겨울장인")
+	await process_frame
+	main.nickname_confirmation.confirmed.emit()
+	main.action_button.pressed.emit()
+	check(main.session.running and main.player_nickname == "겨울장인", "confirmed change becomes session name")
+	main._stage_nickname("늦은입력")
+	check(not main.nickname_pending and main.player_nickname == "겨울장인", "running session rejects late draft")
+	end_round(main, 60)
+	check(main.ranking.records.size() == 1 and main.ranking.records[0].nickname == "겨울장인", "only confirmed name reaches saved result")
+	main.queue_free()
+	await process_frame
 
 func test_ranking() -> void:
 	var path := path_for("sorting")

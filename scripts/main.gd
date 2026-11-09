@@ -8,6 +8,9 @@ var player_nickname := ""
 var result_recorded := false
 var nickname_input: LineEdit
 var nickname_row: HBoxContainer
+var nickname_confirmation: ConfirmationDialog
+var pending_nickname := ""
+var nickname_pending := false
 var validation_label: Label
 var save_label: Label
 var back_button: Button
@@ -69,6 +72,13 @@ func _ready() -> void:
 	validation_label = Label.new()
 	validation_label.add_theme_color_override("font_color", Color("ffb4a0"))
 	column.add_child(validation_label)
+	nickname_confirmation = ConfirmationDialog.new()
+	nickname_confirmation.title = "닉네임 적용 확인"
+	nickname_confirmation.ok_button_text = "적용"
+	nickname_confirmation.cancel_button_text = "취소"
+	nickname_confirmation.confirmed.connect(_confirm_nickname)
+	nickname_confirmation.canceled.connect(_cancel_nickname)
+	add_child(nickname_confirmation)
 	var row := HBoxContainer.new()
 	mold_row = row
 	row.add_theme_constant_override("separation", 18)
@@ -113,11 +123,37 @@ func _ready() -> void:
 	_render(Time.get_ticks_usec())
 
 func _open_nickname_dialog() -> void:
-	if has_started:
+	if has_started or nickname_pending:
 		return
-	var error := DisplayServer.dialog_input_text("닉네임 입력", "한글·영문·숫자 1~12자", nickname_input.text, _accept_nickname)
+	var error := DisplayServer.dialog_input_text("닉네임 입력", "한글·영문·숫자 1~12자\nOK를 누른 뒤 적용 또는 취소를 선택하세요.", nickname_input.text, _stage_nickname)
 	if error != OK:
 		validation_label.text = "닉네임 입력창을 열 수 없습니다. 다시 시도해 주세요."
+
+func _stage_nickname(value: String) -> void:
+	if has_started or nickname_pending:
+		return
+	pending_nickname = value
+	nickname_pending = true
+	var preview := value.strip_edges().left(24)
+	nickname_confirmation.dialog_text = "입력한 닉네임: %s\n적용하시겠습니까? 취소하면 기존 이름을 유지합니다." % (preview if not preview.is_empty() else "(빈 값)")
+	# The native callback runs before its modal dialog closes.
+	_show_nickname_confirmation.call_deferred()
+
+func _show_nickname_confirmation() -> void:
+	if nickname_pending and not has_started:
+		nickname_confirmation.popup_centered(Vector2i(540, 160))
+
+func _cancel_nickname() -> void:
+	pending_nickname = ""
+	nickname_pending = false
+	nickname_confirmation.hide()
+
+func _confirm_nickname() -> void:
+	if not nickname_pending:
+		return
+	var value := pending_nickname
+	_cancel_nickname()
+	_accept_nickname(value)
 
 func _accept_nickname(value: String) -> void:
 	if has_started:
@@ -126,7 +162,7 @@ func _accept_nickname(value: String) -> void:
 	validation_label.text = RankingStore.nickname_error(value)
 
 func _start_round() -> void:
-	if session.running:
+	if session.running or nickname_pending:
 		return
 	if not has_started:
 		# Commit any Korean IME composition before reading the final nickname.
