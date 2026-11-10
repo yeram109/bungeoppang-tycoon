@@ -241,7 +241,9 @@ func test_ui() -> void:
 	end_round(main)
 	await process_frame
 	check(main.get_global_rect().encloses(main.back_button.get_global_rect()), "result controls fit with ten long names")
-	check(main.leaderboard_rows.get_parent().get_v_scroll_bar().max_value > main.leaderboard_rows.get_parent().size.y, "all existing rows accessible by scrolling")
+	var scroll = main.leaderboard_rows.get_parent()
+	var last_row = main.leaderboard_rows.get_child(9)
+	check(scroll.get_global_rect().encloses(last_row.get_global_rect()) or scroll.get_v_scroll_bar().max_value > scroll.size.y, "all ten rows fit or remain accessible by scrolling")
 	main.queue_free()
 	await process_frame
 	var corrupt_path := path_for("ui-corrupt")

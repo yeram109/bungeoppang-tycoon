@@ -1,4 +1,5 @@
 extends Control
+var final_design = preload("res://scripts/final_design.gd").new()
 const Session = preload("res://scripts/cooking_session.gd")
 const MoldScene = preload("res://scenes/cooking_mold.tscn")
 const RankingStore = preload("res://scripts/ranking_store.gd")
@@ -230,6 +231,7 @@ func _ready() -> void:
 	preparation_label.mouse_filter = Control.MOUSE_FILTER_STOP
 	preparation_label.z_index = 200
 	add_child(preparation_label)
+	final_design.setup(self)
 	_refresh_rankings()
 	_render(Time.get_ticks_usec())
 
@@ -466,6 +468,7 @@ func _render(now: int) -> void:
 	leaderboard_panel.visible = not session.running and not session.preparing
 	save_label.visible = not session.running and not session.preparing and not save_label.text.is_empty()
 	back_button.visible = ended
+	final_design.render(self)
 
 func _finish_if_needed() -> void:
 	if not has_started or session.running or session.preparing or result_recorded:
