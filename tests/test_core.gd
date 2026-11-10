@@ -211,7 +211,7 @@ func test_display_boundaries() -> void:
 		main.session.start(0)
 		main.session.advance(sample[0])
 		main._render(sample[0])
-		check(main.status_label.text == "남은 시간 %s초" % sample[1], "actual countdown label at %d" % sample[0])
+		check(main.status_label.text == "%s초" % sample[1], "actual countdown label at %d" % sample[0])
 		check(main.session.running == sample[2] and view.cook_button.disabled == not sample[2], "display and input availability agree at deadline")
 		check(main.result_label.text.contains("시간 종료!") == not sample[2], "result visibility agrees with countdown")
 		if sample[0] >= 89_899_999:

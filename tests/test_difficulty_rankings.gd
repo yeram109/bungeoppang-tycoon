@@ -37,6 +37,9 @@ func finish(main, revenue: int = 0) -> void:
 	main.session.advance(main.session.started_at + main.Session.DURATION_USEC)
 	main._finish_if_needed()
 	main._render(main.session.started_at + main.Session.DURATION_USEC)
+	main._accept_nickname("같은닉네임")
+	main.save_button.pressed.emit()
+
 func run() -> void:
 	await test_sorting_and_views()
 	await test_round_routing()
@@ -69,7 +72,7 @@ func test_sorting_and_views() -> void:
 		await process_frame
 		check(main.ranking.records == stores[mode].records and main.leaderboard_rows.get_child_count() == 10, "selection shows only that mode's ten rows")
 		check(main.ranking_title.text.begins_with(Mold.difficulty_name(mode)) and main.ranking_title.text.contains(str(3000 + mode * 10000)), "title includes selected mode and best")
-		check(main.leaderboard_rows.get_child(0).text.contains(str(3000 + mode * 10000)), "top row uses selected score")
+		check(main.leaderboard_rows.get_child(0).text.replace(",", "").contains(str(3000 + mode * 10000)), "top row uses selected score")
 		check(main.get_global_rect().encloses(main.action_button.get_global_rect()), "ten long names fit start screen")
 	check(FileAccess.get_file_as_string(paths[0]) == bytes[0] and FileAccess.get_file_as_string(paths[1]) == bytes[1], "loading and switching never rewrite either file")
 	main.queue_free()

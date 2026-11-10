@@ -120,7 +120,7 @@ func test_ui(mode: int) -> void:
 	main.difficulty_select.item_selected.emit(mode)
 	await process_frame
 	check(main.help.text.contains("[이지]" if mode == D.EASY else "[일반]") and main.help.text.contains("5~8초" if mode == D.EASY else "5~7초"), "selection updates actual timing guide")
-	check(main.leaderboard_panel.visible and main.ranking_title.text.begins_with(Mold.difficulty_name(mode)), "both modes display their own ranking")
+	check(main.final_design.ranking_button.visible and main.ranking_title.text.begins_with(Mold.difficulty_name(mode)), "both modes display their own ranking")
 	main.action_button.pressed.emit()
 	var started: int = main.session.started_at
 	check(main.session.difficulty == mode and main.session.preparing and not main.difficulty_select.visible, "round captures choice and hides selector")
@@ -147,6 +147,9 @@ func test_ui(mode: int) -> void:
 	check(main.session.revenue == 2000 and main.sales_feedback.text.contains("2,000원"), "both modes route real cooking through UI sale")
 	main.session.started_at = Time.get_ticks_usec() - Session.DURATION_USEC
 	main._process(0)
+	check(not main.result_recorded, "end waits for manual registration")
+	main._accept_nickname("난이도검증")
+	main.save_button.pressed.emit()
 	check(main.result_label.text.contains("2000원") and main.action_button.visible, "both modes show actual final revenue")
 	if mode == D.EASY:
 		check(main.save_label.text == "기록 저장 완료" and main.leaderboard_panel.visible and main.ranking.records[0].score == 2000, "easy result saved to its own ranking")
@@ -159,9 +162,11 @@ func test_ui(mode: int) -> void:
 		main._process(0)
 	check(FileAccess.get_file_as_string(path) == saved, "duplicate finish never writes")
 	main.action_button.pressed.emit()
-	check(main.session.difficulty == mode and main.session.preparing and main.player_nickname == "난이도검증", "retry ignores hidden selector and preserves mode/name")
+	check(main.session.difficulty == mode and main.session.preparing and main.player_nickname.is_empty(), "retry preserves mode but resets name")
 	main.session.advance(main.session.started_at + Session.DURATION_USEC)
 	main._finish_if_needed()
+	main._accept_nickname("난이도검증")
+	main.save_button.pressed.emit()
 	if mode == D.EASY:
 		check(FileAccess.get_file_as_string(path) == original, "easy repeat zero result never changes normal ranking")
 	main.back_button.pressed.emit()
@@ -184,6 +189,8 @@ func test_ui(mode: int) -> void:
 		main.action_button.pressed.emit()
 		main.session.advance(main.session.started_at + Session.DURATION_USEC)
 		main._finish_if_needed()
+		main._accept_nickname("이지최초")
+		main.save_button.pressed.emit()
 		check(not FileAccess.file_exists(path) and not FileAccess.file_exists(path + ".tmp"), "first easy game creates no normal ranking file")
 		main.queue_free()
 		await process_frame

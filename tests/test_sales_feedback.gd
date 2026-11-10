@@ -56,7 +56,7 @@ func run() -> void:
 		main._render(2_299_999)
 		check(main.sales_feedback.visible, "visible just before 1.3 seconds")
 		main._render(2_300_000)
-		check(not main.sales_feedback.visible and main.sales_feedback.text.is_empty() and main.bag_hint.visible, "expires exactly at 1.3 seconds")
+		check(not main.sales_feedback.visible and main.sales_feedback.text.is_empty() and not main.bag_hint.visible, "expires exactly at 1.3 seconds")
 		main._render(2_300_001)
 		check(main.sales_feedback_until == 0, "expired state stays cleared")
 	reset(main)
