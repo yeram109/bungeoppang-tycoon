@@ -479,7 +479,7 @@ func _render(now: int) -> void:
 	leaderboard_panel.visible = not session.running and not session.preparing
 	save_label.visible = not session.running and not session.preparing and not save_label.text.is_empty()
 	back_button.visible = ended
-	final_design.render(self)
+	final_design.render(self, now)
 
 func _finish_if_needed() -> void:
 	if not has_started or session.running or session.preparing or result_ready:

@@ -205,7 +205,8 @@ func money(value: int) -> String:
 		number = number.insert(index,",")
 		index -= 3
 	return number + "원"
-func render(main) -> void:
+func render(main, now: int = -1) -> void:
+	if now < 0: now = Time.get_ticks_usec()
 	var play: bool = main.session.running or main.session.preparing
 	var ended: bool = main.has_started and not play
 	background.texture = texture("play_base" if play else ("result_base" if ended else "start_base"))
@@ -267,13 +268,8 @@ func render(main) -> void:
 	for i in main.mold_views.size():
 		var view = main.mold_views[i]
 		var mold = main.session.molds[i]
-		var name: String = ["grill_empty","grill_batter","grill_filling","grill_covered","grill_cooking","grill_normal","grill_burnt"][mold.state]
-		if mold.state == main.Mold.State.SIDE_1:
-			if view.cook_button.text.contains("완벽"): name = "grill_flip_perfect"
-			elif view.cook_button.text.contains("일반"): name = "grill_flip_normal"
-		if mold.state == main.Mold.State.READY and mold.quality == main.Mold.Quality.DELICIOUS: name = "grill_perfect_with_sparkles"
-		mold_art[i].texture = texture(name)
 		cooking_effects[i].sync(mold.state, main.session.running)
+		cooking_effects[i].update_browning(mold, mini(now, main.session.started_at + main.Session.DURATION_USEC))
 		view.cook_button.tooltip_text = ""
 		view.progress.hide()
 		mold_status[i].hide()

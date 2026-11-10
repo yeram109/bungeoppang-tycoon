@@ -15,6 +15,44 @@ var cooking := false
 var phase := 0.0
 var progress := 0.0
 var seed := 0.0
+var blend_material: ShaderMaterial
+var blend_frame: Dictionary = {}
+var textures: Dictionary = {}
+
+# The mixer only reads model time. Hard ingredient/side changes stay immediate;
+# raw -> normal and normal -> perfect use the mode's actual timing boundaries.
+static func browning_frame(state: int, elapsed: int, difficulty: int, first_quality: int) -> Dictionary:
+	var names := ["grill_empty", "grill_batter", "grill_filling", "grill_covered", "grill_cooking", "grill_normal", "grill_burnt"]
+	var first: String = names[state]
+	var second := first
+	var weight := 0.0
+	if state in [Mold.State.SIDE_1, Mold.State.SIDE_2, Mold.State.READY]:
+		var side_one := state == Mold.State.SIDE_1
+		var timing := Mold.timing(side_one, difficulty)
+		var raw := "grill_covered" if side_one else "grill_cooking"
+		var normal := "grill_flip_normal" if side_one else "grill_normal"
+		var perfect := "grill_flip_perfect" if side_one else ("grill_perfect_with_sparkles" if first_quality == Mold.SideQuality.PERFECT else normal)
+		if elapsed < timing[0]:
+			first = raw
+			second = normal
+			weight = clampf(float(elapsed) / timing[0],0.0,1.0)
+		elif elapsed <= timing[1]:
+			first = normal
+			second = normal
+		else:
+			first = normal
+			second = perfect
+			weight = clampf(float(elapsed-timing[1]) / (timing[2]-timing[1]),0.0,1.0)
+	return {"from":first,"to":second,"weight":weight}
+
+func update_browning(mold: RefCounted, now: int) -> void:
+	blend_frame = browning_frame(mold.state,mold.elapsed_at(now),mold.difficulty,mold.first_quality)
+	for name in [blend_frame.from,blend_frame.to]:
+		if not textures.has(name): textures[name] = load("res://assets/design/"+name+".png")
+	artwork.texture = textures[blend_frame.from]
+	blend_material.set_shader_parameter("next_texture",textures[blend_frame.to])
+	blend_material.set_shader_parameter("blend_amount",blend_frame.weight)
+
 
 func setup(image: TextureRect, index: int) -> void:
 	artwork = image
@@ -24,6 +62,9 @@ func setup(image: TextureRect, index: int) -> void:
 	artwork.get_parent().add_child(backing)
 	artwork.get_parent().move_child(backing,artwork.get_index())
 	backing.hide()
+	blend_material = ShaderMaterial.new()
+	blend_material.shader = preload("res://scripts/cooking_crossfade.gdshader")
+	artwork.material = blend_material
 	seed = index * 0.37
 	phase = seed
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -124,11 +165,6 @@ func _draw() -> void:
 			for j in 5:
 				points.append(Vector2(x + sin(t * TAU + j * 0.8) * 3.0,53.0 - t * 34.0 - j * 4.0))
 			draw_polyline(points,Color(1.0,0.95,0.84,alpha),2.2,true)
-			if previous_state in [Mold.State.FIRST_BATTER,Mold.State.FILLING_ADDED,Mold.State.SIDE_1]:
-				var center := Vector2(x,70 + sin(i)*5)
-				var radius := 2.0+t*4.0
-				draw_circle(center,radius,Color(1.0,0.95,0.84,alpha*0.65))
-				draw_arc(center,radius,0,TAU,16,Color(0.63,0.39,0.23,alpha),1.5,true)
 	if action == POUR and progress > 0.18 and progress < 0.85:
 		var alpha := sin((progress-0.18)/0.67*PI)
 		draw_line(Vector2(104,44),Vector2(97,76),Color(1.0,0.94,0.82,alpha),4.0,true)
