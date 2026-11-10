@@ -68,7 +68,7 @@ func render(main) -> void:
 	main.filling_button.visible = play
 	main.bag_button.visible = play
 	main.sale_zone.visible = play
-	main.bag_hint.hide()
+	main.bag_hint.visible = play and not main.sales_feedback.visible
 	main.tool_status.hide()
 	place(main.mold_row, Rect2(30, 186, 670, 340))
 	place(main.batter_button, Rect2(720, 282, 216, 105))
@@ -76,7 +76,7 @@ func render(main) -> void:
 	place(main.bag_button, Rect2(720, 105, 216, 160))
 	place(main.sale_zone, Rect2(24, 30, 680, 140))
 	place(main.sales_feedback, Rect2(45, 45, 280, 85))
-	place(main.bag_hint, Rect2(350, 70, 320, 70))
+	place(main.bag_hint, Rect2(40, 135, 600, 35))
 	place(main.status_label, Rect2(720, 28, 216, 30))
 	place(main.revenue_label, Rect2(720, 62, 216, 32))
 	main.status_label.add_theme_font_size_override("font_size", 20)
