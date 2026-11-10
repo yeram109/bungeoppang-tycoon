@@ -29,22 +29,27 @@ func run() -> void:
 		check(main.difficulty_select.get_selected_id() == mode and main.ranking == (main.normal_ranking if mode == 0 else main.easy_ranking), "visible difficulty button routes selection and ranking")
 		main.difficulty_select.select(mode)
 		main.difficulty_select.item_selected.emit(mode)
+		main.final_design.ranking_button.pressed.emit()
+		check(main.final_design.ranking_dialog.visible and main.final_design.ranking_dialog.dialog_text.contains(main.ranking_title.text), "TOP 10 button opens selected mode ranking")
+		main.final_design.ranking_dialog.hide()
 		var store = main.ranking
 		var other = main.easy_ranking if mode == 0 else main.normal_ranking
 		var other_order: int = other.next_order
 		for amount in [0, 1600]:
 			main.action_button.pressed.emit()
+			check(not main.bag_hint.visible and not main.mold_views[0].progress.visible and not main.final_design.mold_status[0].visible and main.mold_views[0].cook_button.tooltip_text.is_empty(), "play removes extra status gauge and tooltip")
 			check(main.session.preparing and main.nickname_input.text.is_empty() and main.player_nickname.is_empty(), "unnamed start and fresh name state")
 			main.save_button.pressed.emit()
+			check(main.get_global_rect().encloses(main.status_label.get_global_rect()) and main.get_global_rect().encloses(main.revenue_label.get_global_rect()), "play totals stay inside 960x540")
 			check(not main.result_recorded, "preparation cannot save")
 			finish(main, amount)
 			var before: int = store.next_order
 			for i in 3: main._process(0)
 			check(store.next_order == before and main.save_label.text.begins_with("미저장"), "end and UI refresh do not save")
 			await process_frame
-			for control in [main.nickname_row, main.save_button, main.leaderboard_panel, main.save_label, main.result_label, main.action_button, main.back_button]:
+			for control in [main.nickname_row, main.save_button, main.final_design.amount, main.final_design.form_heading, main.action_button, main.back_button]:
 				check(control.visible and main.get_global_rect().encloses(control.get_global_rect()), "result control visible within viewport")
-			check(not main.nickname_row.get_global_rect().intersects(main.save_button.get_global_rect()) and not main.save_button.get_global_rect().intersects(main.leaderboard_panel.get_global_rect()), "registration controls do not overlap")
+			check(not main.nickname_row.get_global_rect().intersects(main.save_button.get_global_rect()) and not main.leaderboard_panel.visible, "registration controls do not overlap")
 			for invalid in ["", "  ", "1234567890123"]:
 				main._accept_nickname(invalid)
 				main.save_button.pressed.emit()
@@ -65,7 +70,7 @@ func run() -> void:
 			check(main.save_label.text.begins_with("기록 저장 실패:"), "refresh preserves failure message")
 			DirAccess.remove_absolute(store.path + ".tmp")
 			main.save_button.pressed.emit()
-			check(main.result_recorded and main.save_button.disabled and main.save_label.text == "기록 저장 완료", "explicit retry succeeds")
+			check(main.leaderboard_panel.visible and not main.nickname_row.visible and main.result_recorded and main.save_button.disabled and main.save_label.text == "기록 저장 완료", "explicit retry succeeds")
 			var saved: String = FileAccess.get_file_as_string(store.path)
 			for i in 3: main.save_button.pressed.emit()
 			main._accept_nickname("저장후변경")

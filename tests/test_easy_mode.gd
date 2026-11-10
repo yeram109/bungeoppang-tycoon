@@ -120,7 +120,7 @@ func test_ui(mode: int) -> void:
 	main.difficulty_select.item_selected.emit(mode)
 	await process_frame
 	check(main.help.text.contains("[이지]" if mode == D.EASY else "[일반]") and main.help.text.contains("5~8초" if mode == D.EASY else "5~7초"), "selection updates actual timing guide")
-	check(main.leaderboard_panel.visible and main.ranking_title.text.begins_with(Mold.difficulty_name(mode)), "both modes display their own ranking")
+	check(main.final_design.ranking_button.visible and main.ranking_title.text.begins_with(Mold.difficulty_name(mode)), "both modes display their own ranking")
 	main.action_button.pressed.emit()
 	var started: int = main.session.started_at
 	check(main.session.difficulty == mode and main.session.preparing and not main.difficulty_select.visible, "round captures choice and hides selector")

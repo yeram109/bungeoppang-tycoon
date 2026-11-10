@@ -205,7 +205,7 @@ func test_ui() -> void:
 	check(main.session.running and main.player_nickname.is_empty(), "retry clears nickname")
 	end_round(main)
 	main.back_button.pressed.emit()
-	check(not main.has_started and not main.nickname_row.visible and main.leaderboard_panel.visible, "return to start and existing leaderboard")
+	check(not main.has_started and not main.nickname_row.visible and main.final_design.ranking_button.visible, "return to start and existing leaderboard")
 	main.queue_free()
 	await process_frame
 	# Seed an isolated TOP 10 fixture and verify currency saves through the real UI.

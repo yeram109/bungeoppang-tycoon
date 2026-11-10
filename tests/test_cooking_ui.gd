@@ -174,7 +174,7 @@ func test_ui() -> void:
 		main.session.start(0)
 		main.session.advance(sample[0])
 		main._render(sample[0])
-		check(main.status_label.text == "남은 시간 %s초" % sample[1], "countdown ceil boundary")
+		check(main.status_label.text == "%s초" % sample[1], "countdown ceil boundary")
 		check(main.session.running == sample[2] and main.mold_views[0].cook_button.disabled == not sample[2], "deadline label and input agree")
 	main.session.start(Time.get_ticks_usec())
 	main._render(Time.get_ticks_usec())

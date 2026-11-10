@@ -18,6 +18,14 @@ var bag_art: Control
 var breads: Array[TextureRect] = []
 var tool_art: Array[TextureRect] = []
 var modes: Array[Button] = []
+var ranking_button: Button
+var ranking_dialog: AcceptDialog
+var form_heading: Label
+var revenue_caption: Label
+var cursor_art: TextureRect
+var drag_art: Control
+var clock_art: TextureRect
+var coin_art: TextureRect
 var sale_style := StyleBoxTexture.new()
 func texture(name: String) -> Texture2D:
 	if not backgrounds.has(name): backgrounds[name] = load(BASE + name + ".png")
@@ -156,6 +164,33 @@ func setup(main) -> void:
 	main.sales_feedback.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	main.bag_hint.add_theme_color_override("font_color",INK)
 	main.ranking_title.add_theme_font_size_override("font_size",14)
+	ranking_button = Button.new()
+	ranking_button.text = "TOP 10 ↗"
+	ranking_button.pressed.connect(func():
+		var lines := PackedStringArray([main.ranking_title.text])
+		for row in main.leaderboard_rows.get_children(): lines.append(row.text)
+		if not main.ranking.load_message.is_empty(): lines.append(main.ranking.load_message)
+		ranking_dialog.dialog_text = "\n".join(lines)
+		ranking_dialog.popup_centered(Vector2i(550,420)))
+	main.add_child(ranking_button)
+	button_style(ranking_button,false,true)
+	ranking_dialog = AcceptDialog.new()
+	ranking_dialog.title = "TOP 10"
+	ranking_dialog.ok_button_text = "닫기"
+	main.add_child(ranking_dialog)
+	ranking_dialog.get_label().add_theme_color_override("font_color", PAPER)
+	form_heading = label(main,"오늘의 기록을 남겨볼까요?",24)
+	revenue_caption = label(main,"이번 영업의 최종 수익",16)
+	cursor_art = art(main.tool_cursor,"kettle",Rect2(0,0,52,52))
+	for node in [main.tool_cursor,main.drag_preview]:
+		node.add_theme_color_override("font_color",Color.TRANSPARENT)
+		node.add_theme_constant_override("outline_size",0)
+	drag_art = bag_art.duplicate()
+	main.drag_preview.add_child(drag_art)
+	drag_art.position = Vector2.ZERO
+	drag_art.scale = Vector2(0.6,0.6)
+	clock_art = art(main,"timer_icon",Rect2(785,30,25,25))
+	coin_art = art(main,"coin_icon",Rect2(755,65,25,25))
 	main.preparation_label.add_theme_color_override("font_color",PAPER)
 	main.move_child(main.preparation_label,main.get_child_count()-1)
 func money(value: int) -> String:
@@ -170,27 +205,31 @@ func render(main) -> void:
 	var ended: bool = main.has_started and not play
 	background.texture = texture("play_base" if play else ("result_base" if ended else "start_base"))
 	panel.visible = not play and not ended
-	place(panel,Rect2(562,80,355,440))
+	place(panel,Rect2(562,90,355,345))
 	welcome.visible = not main.has_started
-	place(welcome,Rect2(588,107,303,65))
+	place(welcome,Rect2(588,120,303,65))
 	main.difficulty_select.hide()
 	for i in modes.size():
 		modes[i].visible = not main.has_started
 		modes[i].set_pressed_no_signal(main.difficulty_select.get_selected_id() == (1 if i == 0 else 0))
-		place(modes[i],Rect2(588+i*152,198,144,56))
+		place(modes[i],Rect2(588+i*159.5,224,143.5,56))
 	for node in [heading,amount,mode_label,decoration,divider]: node.visible = ended
 	place(heading,Rect2(0,38,960,50))
 	place(mode_label,Rect2(52,125,350,28))
-	mode_label.text = main.Mold.difficulty_name(main.session.difficulty) + " 모드 · 이번 영업의 최종 수익"
+	mode_label.text = main.Mold.difficulty_name(main.session.difficulty) + " 모드"
 	place(amount,Rect2(52,177,350,90))
 	amount.text = money(main.session.revenue)
 	place(divider,Rect2(437,100,14,405))
+	revenue_caption.visible = ended
+	place(revenue_caption,Rect2(52,163,350,28))
+	ranking_button.visible = not main.has_started
+	place(ranking_button,Rect2(588,372,303,30))
 	main.tool_status.hide()
 	main.batter_button.visible = play
 	main.filling_button.visible = play
 	main.bag_button.visible = play
 	main.sale_zone.visible = play
-	main.bag_hint.visible = play and not main.sales_feedback.visible and not main.bag_hint.text.begins_with("3개를 모아 판매")
+	main.bag_hint.hide()
 	place(main.mold_row,Rect2(40,198,648,319))
 	main.mold_row.add_theme_constant_override("h_separation",10)
 	main.mold_row.add_theme_constant_override("v_separation",8)
@@ -202,12 +241,17 @@ func render(main) -> void:
 	sale_style.texture = texture("sale_handoff_ready" if main.dragging else "sale_handoff_idle")
 	main.sale_zone.add_theme_stylebox_override("panel",sale_style)
 	main.sale_zone.get_child(0).hide()
-	main.sale_zone.tooltip_text = "3개 봉투를 여기에 놓아 판매"
+	main.sale_zone.tooltip_text = ""
 	place(main.sales_feedback,Rect2(40,29,260,96))
 	place(main.bag_hint,Rect2(40,130,580,40))
-	place(main.status_label,Rect2(720,27,206,33))
-	place(main.revenue_label,Rect2(720,60,206,35))
-	main.status_label.add_theme_font_size_override("font_size",21)
+	main.status_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	main.revenue_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	place(main.status_label,Rect2(812,27,114,33))
+	main.status_label.text = main.status_label.text.trim_prefix("남은 시간 ")
+	clock_art.visible = play
+	coin_art.visible = play
+	place(main.revenue_label,Rect2(780,60,146,35))
+	main.status_label.add_theme_font_size_override("font_size",26)
 	main.status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	main.revenue_label.add_theme_font_size_override("font_size",29)
 	main.revenue_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -224,29 +268,47 @@ func render(main) -> void:
 			elif view.cook_button.text.contains("일반"): name = "grill_flip_normal"
 		if mold.state == main.Mold.State.READY and mold.quality == main.Mold.Quality.DELICIOUS: name = "grill_perfect_with_sparkles"
 		mold_art[i].texture = texture(name)
-		view.cook_button.tooltip_text = view.cook_button.text + "\n" + view.feedback_label.text
+		view.cook_button.tooltip_text = ""
+		view.progress.hide()
+		mold_status[i].hide()
 		mold_status[i].text = view.feedback_label.text if not main.session.feedback[i].is_empty() and view.feedback_label.text == main.session.feedback[i] else view.cook_button.text.get_slice("\n",0)
 		mold_status[i].text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	main.bag_button.tooltip_text = main.bag_button.text
-	main.batter_button.tooltip_text = "양은주전자 · 반죽"
-	main.filling_button.tooltip_text = "주걱 · 팥"
+	main.bag_button.tooltip_text = ""
+	main.batter_button.tooltip_text = ""
+	main.filling_button.tooltip_text = ""
+	cursor_art.texture = texture("kettle" if main.session.selected_tool == main.Session.Tool.BATTER else "spatula_cursor")
+	cursor_art.visible = main.mold_row.get_global_rect().has_point(main.get_global_mouse_position())
 	var contents: Array = main.session.bag.items
 	for i in breads.size():
 		breads[i].visible = i < contents.size()
 		if i < contents.size():
 			breads[i].texture = texture({main.Mold.Quality.NORMAL:"bread_normal",main.Mold.Quality.DELICIOUS:"bread_perfect",main.Mold.Quality.BURNT:"bread_burnt"}[contents[i]])
 			breads[i].position.x = 37 + (i-(contents.size()-1)/2.0)*58
-	place(main.nickname_row,Rect2(470,130,440,44))
-	place(main.validation_label,Rect2(470,180,440,28))
+	for i in breads.size():
+		var ghost = drag_art.get_child(i+1)
+		ghost.texture = breads[i].texture
+		ghost.visible = breads[i].visible
+		ghost.position = breads[i].position
+	form_heading.visible = ended and not main.result_recorded
+	place(form_heading,Rect2(482,139,416,40))
+	main.nickname_row.visible = ended and not main.result_recorded
+	main.save_button.visible = ended and not main.result_recorded
+	place(main.nickname_row,Rect2(482,223,416,53))
+	place(main.validation_label,Rect2(482,281,416,28))
 	main.validation_label.add_theme_color_override("font_color",RED)
-	place(main.save_button,Rect2(470,215,440,45))
+	place(main.save_button,Rect2(482,322,416,48))
 	place(main.result_label,Rect2(52,273,350,70) if ended else Rect2(588,265,303,0))
 	main.result_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	main.result_label.add_theme_font_size_override("font_size",13)
-	main.result_label.visible = ended
+	main.result_label.hide()
 	decoration.position = Vector2(52,325)
-	place(main.leaderboard_panel,Rect2(470,292,440,151) if ended else Rect2(588,365,303,110))
-	place(main.save_label,Rect2(470,460,440,60) if ended else Rect2(588,478,303,36))
+	for i in main.ranking.records.size():
+		var record: Dictionary = main.ranking.records[i]
+		main.leaderboard_rows.get_child(i).text = "%2d.  %s  ·  %s" % [i+1, record.nickname, money(record.score)]
+	main.leaderboard_panel.visible = ended and main.result_recorded
+	place(main.leaderboard_panel,Rect2(470,170,440,329))
+	place(main.save_label,Rect2(482,382,416,64) if ended and not main.result_recorded else Rect2(470,115,440,40))
 	main.save_label.add_theme_font_size_override("font_size",13)
-	place(main.action_button,Rect2(52,408,320,45) if ended else Rect2(588,290,303,54))
+	main.save_label.visible = ended and (main.result_recorded or main.save_label.text.begins_with("기록 저장 실패"))
+	place(main.action_button,Rect2(52,408,320,45) if ended else Rect2(588,304,303,54))
 	place(main.back_button,Rect2(52,463,320,36))

@@ -91,7 +91,7 @@ func test_ui() -> void:
 	finish(main)
 	check(main.ranking.records.size() == 1 and main.ranking.records[0].score == 2000, "end saves actual sale revenue")
 	check(main.result_label.text.contains("총 판매 금액 2000원") and main.result_label.text.contains("최고 판매 금액 2000원"), "result and best use currency")
-	check(main.leaderboard_rows.get_child(0).text.contains("2000원") and main.save_label.text == "기록 저장 완료", "ranking and success visible")
+	check(main.leaderboard_rows.get_child(0).text.replace(",", "").contains("2000원") and main.save_label.text == "기록 저장 완료", "ranking and success visible")
 	var bytes := FileAccess.get_file_as_string(path)
 	for index in 5:
 		main._finish_if_needed()
