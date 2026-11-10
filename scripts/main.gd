@@ -12,6 +12,9 @@ var ranking: RefCounted
 var ranking_title: Label
 var player_nickname := ""
 var result_recorded := false
+var result_ready := false
+var result_played_at := 0
+var save_button: Button
 var preparation_label: Label
 var difficulty_select: OptionButton
 var help: Label
@@ -90,7 +93,7 @@ func _ready() -> void:
 	nickname_input.placeholder_text = "한글·영문·숫자 1~12자"
 	nickname_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	nickname_input.custom_minimum_size.y = 38
-	nickname_input.text_submitted.connect(func(_text: String): _start_round())
+	nickname_input.text_submitted.connect(func(_text: String): _save_result())
 	nickname_row.add_child(nickname_input)
 	# Godot 4.7.2's Windows LineEdit loses committed Korean syllables on
 	# the tested Microsoft IME. Use the engine's native Windows edit control.
@@ -217,6 +220,10 @@ func _ready() -> void:
 	action_button.focus_mode = Control.FOCUS_NONE
 	action_button.pressed.connect(_start_round)
 	column.add_child(action_button)
+	save_button = Button.new()
+	save_button.text = "기록 저장"
+	save_button.pressed.connect(_save_result)
+	column.add_child(save_button)
 	back_button = Button.new()
 	back_button.text = "시작 화면으로"
 	back_button.pressed.connect(_show_start)
@@ -236,14 +243,14 @@ func _ready() -> void:
 	_render(Time.get_ticks_usec())
 
 func _open_nickname_dialog() -> void:
-	if has_started or nickname_pending:
+	if not _can_register_result() or nickname_pending:
 		return
 	var error := DisplayServer.dialog_input_text("닉네임 입력", "한글·영문·숫자 1~12자\nOK를 누른 뒤 적용 또는 취소를 선택하세요.", nickname_input.text, _stage_nickname)
 	if error != OK:
 		validation_label.text = "닉네임 입력창을 열 수 없습니다. 다시 시도해 주세요."
 
 func _stage_nickname(value: String) -> void:
-	if has_started or nickname_pending:
+	if not _can_register_result() or nickname_pending:
 		return
 	pending_nickname = value
 	nickname_pending = true
@@ -253,7 +260,7 @@ func _stage_nickname(value: String) -> void:
 	_show_nickname_confirmation.call_deferred()
 
 func _show_nickname_confirmation() -> void:
-	if nickname_pending and not has_started:
+	if nickname_pending and _can_register_result():
 		nickname_confirmation.popup_centered(Vector2i(540, 160))
 
 func _cancel_nickname() -> void:
@@ -268,8 +275,11 @@ func _confirm_nickname() -> void:
 	_cancel_nickname()
 	_accept_nickname(value)
 
+func _can_register_result() -> bool:
+	return has_started and result_ready and not session.running and not session.preparing and not result_recorded
+
 func _accept_nickname(value: String) -> void:
-	if has_started:
+	if not _can_register_result():
 		return
 	nickname_input.text = value.strip_edges()
 	validation_label.text = RankingStore.nickname_error(value)
@@ -277,15 +287,11 @@ func _accept_nickname(value: String) -> void:
 func _start_round() -> void:
 	if session.running or session.preparing or nickname_pending:
 		return
-	if not has_started:
-		# Commit any Korean IME composition before reading the final nickname.
-		nickname_input.apply_ime()
-		var error: String = RankingStore.nickname_error(nickname_input.text)
-		if not error.is_empty():
-			validation_label.text = error
-			return
-		player_nickname = nickname_input.text.strip_edges()
-		nickname_input.text = player_nickname
+	_cancel_nickname()
+	nickname_input.text = ""
+	player_nickname = ""
+	result_ready = false
+	result_played_at = 0
 	nickname_input.release_focus()
 	validation_label.text = ""
 	save_label.text = ""
@@ -436,7 +442,7 @@ func _render(now: int) -> void:
 	for index in mold_views.size():
 		var message: String = session.feedback[index] if now - session.feedback_at[index] < 1_200_000 else ""
 		mold_views[index].render(session.molds[index], index, display_time, session.running, message)
-	result_label.text = "%s 님 · 시간 종료!\n총 판매 금액 %d원 · 최고 판매 금액 %d원" % [player_nickname, session.revenue, ranking.best_score()] if ended else "3초 준비 후 90초 동안 굽기 → 수거 → 3개 봉투 판매를 진행하세요."
+	result_label.text = "시간 종료!\n총 판매 금액 %d원\n최고 판매 금액 %d원" % [session.revenue, ranking.best_score()] if ended else "3초 준비 후 90초 동안 굽기 → 수거 → 3개 봉투 판매를 진행하세요."
 	result_label.visible = not session.running and not session.preparing
 	preparation_label.visible = session.preparing
 	preparation_label.text = str(session.preparation_number(now)) if session.preparing else ""
@@ -462,8 +468,13 @@ func _render(now: int) -> void:
 	drag_preview.position = (get_local_mouse_position() + Vector2(18, 18)).clamp(Vector2.ZERO, (size - drag_preview.size).max(Vector2.ZERO))
 	action_button.visible = not session.running and not session.preparing
 	action_button.text = "다시 하기" if ended else "게임 시작"
-	nickname_row.visible = not has_started
-	validation_label.visible = not has_started and not validation_label.text.is_empty()
+	nickname_row.visible = ended
+	save_button.visible = ended
+	save_button.disabled = result_recorded or nickname_pending
+	save_button.text = "저장 완료" if result_recorded else "기록 저장"
+	for child in nickname_row.get_children():
+		if child is Button: child.disabled = result_recorded or nickname_pending
+	validation_label.visible = ended and not validation_label.text.is_empty()
 	mold_row.visible = session.running or session.preparing
 	leaderboard_panel.visible = not session.running and not session.preparing
 	save_label.visible = not session.running and not session.preparing and not save_label.text.is_empty()
@@ -471,20 +482,36 @@ func _render(now: int) -> void:
 	final_design.render(self)
 
 func _finish_if_needed() -> void:
-	if not has_started or session.running or session.preparing or result_recorded:
+	if not has_started or session.running or session.preparing or result_ready:
 		return
-	# Mark the attempt before writing: repeated end/frame/UI events cannot save twice.
 	_cancel_bag_drag()
-	result_recorded = true
+	result_ready = true
+	# Keep achievement time stable across nickname edits and failed save retries.
+	result_played_at = int(Time.get_unix_time_from_system() * 1000)
+	save_label.text = "미저장 · 닉네임 입력 후 기록 저장을 눌러 주세요."
+
+func _save_result() -> void:
+	if not _can_register_result() or nickname_pending:
+		return
+	nickname_input.apply_ime()
+	validation_label.text = RankingStore.nickname_error(nickname_input.text)
+	if not validation_label.text.is_empty():
+		_render(Time.get_ticks_usec())
+		return
+	player_nickname = nickname_input.text.strip_edges()
+	nickname_input.text = player_nickname
 	_use_ranking(session.difficulty)
-	var saved: bool = ranking.add_result(player_nickname, session.revenue, int(Time.get_unix_time_from_system() * 1000))
-	save_label.text = "기록 저장 완료" if saved else "기록 저장 실패: " + ranking.last_error
+	result_recorded = ranking.add_result(player_nickname, session.revenue, result_played_at)
+	save_label.text = "기록 저장 완료" if result_recorded else "기록 저장 실패: " + ranking.last_error + " 다시 시도해 주세요."
 	_refresh_rankings()
+	_render(Time.get_ticks_usec())
 
 func _show_start() -> void:
 	if session.running or session.preparing:
 		return
 	has_started = false
+	result_ready = false
+	_cancel_nickname()
 	validation_label.text = ""
 	save_label.text = ""
 	_render(Time.get_ticks_usec())

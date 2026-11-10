@@ -185,7 +185,7 @@ func test_ui() -> void:
 	main.session.started_at = Time.get_ticks_usec() - Session.DURATION_USEC
 	main._process(0.0)
 	check(not main.tool_cursor.visible and not main.tool_row.visible and main.back_button.visible, "result hides tools and shows return")
-	check(FileAccess.file_exists(main.ranking_path), "actual end creates currency ranking")
+	check(not FileAccess.file_exists(main.ranking_path), "actual end waits for explicit ranking registration")
 	main.queue_free()
 	await process_frame
 

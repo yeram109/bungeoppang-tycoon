@@ -37,6 +37,9 @@ func finish(main, revenue: int = 0) -> void:
 	main.session.advance(main.session.started_at + main.Session.DURATION_USEC)
 	main._finish_if_needed()
 	main._render(main.session.started_at + main.Session.DURATION_USEC)
+	main._accept_nickname("같은닉네임")
+	main.save_button.pressed.emit()
+
 func run() -> void:
 	await test_sorting_and_views()
 	await test_round_routing()

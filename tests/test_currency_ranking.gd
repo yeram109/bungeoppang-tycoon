@@ -75,6 +75,9 @@ func sell(main) -> void:
 func finish(main) -> void:
 	main.session.started_at = Time.get_ticks_usec() - Session.DURATION_USEC
 	main._process(0)
+	main._accept_nickname("원화장인")
+	main.save_button.pressed.emit()
+
 func test_ui() -> void:
 	var path := directory.path_join("ui.json")
 	write(path, legacy())

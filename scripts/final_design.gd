@@ -30,12 +30,12 @@ func setup(main) -> void:
 	paper.set_corner_radius_all(18)
 	panel.add_theme_stylebox_override("panel", paper)
 	main.add_child(panel)
-	for control in [main.nickname_row, main.difficulty_select, main.validation_label, main.status_label, main.revenue_label, main.mold_row, main.tool_row, main.sales_row, main.bag_button, main.batter_button, main.filling_button, main.sale_zone, main.sales_feedback, main.bag_hint, main.result_label, main.leaderboard_panel, main.save_label, main.action_button, main.back_button]:
+	for control in [main.nickname_row, main.difficulty_select, main.validation_label, main.status_label, main.revenue_label, main.mold_row, main.tool_row, main.sales_row, main.bag_button, main.batter_button, main.filling_button, main.sale_zone, main.sales_feedback, main.bag_hint, main.result_label, main.leaderboard_panel, main.save_label, main.save_button, main.action_button, main.back_button]:
 		control.reparent(main)
 	for child in main.get_children():
 		if child is MarginContainer: child.hide()
 	main.add_theme_color_override("font_color", Color("633e2e"))
-	for control in [main.action_button, main.back_button, main.batter_button, main.filling_button, main.bag_button, main.difficulty_select]:
+	for control in [main.save_button, main.action_button, main.back_button, main.batter_button, main.filling_button, main.bag_button, main.difficulty_select]:
 		var style := StyleBoxFlat.new()
 		style.bg_color = Color("bf4d3e") if control == main.action_button else Color("f4d5a0")
 		style.set_corner_radius_all(10)
@@ -86,13 +86,15 @@ func render(main) -> void:
 		var name: String = ["grill_empty", "grill_batter", "grill_filling", "grill_covered", "grill_cooking", "grill_normal", "grill_burnt"][m.state]
 		if m.state == main.Mold.State.READY and m.quality == main.Mold.Quality.DELICIOUS: name = "grill_perfect_with_sparkles"
 		main.mold_views[index].cook_button.icon = texture(name)
-	place(main.nickname_row, Rect2(570, 100, 350, 40))
+	place(main.nickname_row, Rect2(455, 110, 465, 40))
+	place(main.save_button, Rect2(455, 195, 465, 40))
+	main.validation_label.add_theme_color_override("font_color", Color("a83124"))
 	place(main.difficulty_select, Rect2(570, 150, 350, 40))
-	place(main.validation_label, Rect2(570, 195, 350, 30))
+	place(main.validation_label, Rect2(455, 155, 465, 30))
 	place(main.result_label, Rect2(40, 120, 390, 115) if ended else Rect2(570, 205, 350, 65))
 	main.result_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	main.result_label.add_theme_font_size_override("font_size", 20)
-	place(main.leaderboard_panel, Rect2(455, 110, 465, 330) if ended else Rect2(570, 275, 350, 155))
+	place(main.leaderboard_panel, Rect2(455, 250, 465, 190) if ended else Rect2(570, 275, 350, 155))
 	place(main.save_label, Rect2(455, 455, 465, 45) if ended else Rect2(570, 430, 350, 35))
 	place(main.action_button, Rect2(50, 405, 340, 45) if ended else Rect2(570, 470, 350, 40))
 	place(main.back_button, Rect2(50, 465, 340, 40))

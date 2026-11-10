@@ -1,79 +1,108 @@
 # 붕어빵 장인
 
-짧은 게임 제작 이벤트를 위한 Windows 오프라인 2D 미니 타이쿤 프로젝트입니다. 일반·이지 모두 3초 준비 카운트다운 후 90초 동안 독립된 틀 6개를 도구로 조작합니다. F002 닉네임 입력을 유지하며 판매 금액(원) TOP 10을 표시합니다. 붕어빵을 수거해 3개 봉투를 드래그 판매하며, 판매 성공 시 금액과 품질별 손님 반응을 1.3초 함께 표시하며, 종료 시 최종 수익을 로컬에 저장합니다. 최종 디자인과 제출물 구성은 포함하지 않습니다.
+90초 동안 붕어빵을 굽고, 종이봉투에 담아 판매하는 Windows용 오프라인 2D 미니 타이쿤 게임입니다. 독립된 틀 6개를 관리하며 최대 판매 금액에 도전합니다. 일반·이지 난이도와 난이도별 로컬 TOP 10을 지원합니다.
 
-- 기획 기준: [Notion MVP 기획 v0.1](https://app.notion.com/p/41387148aa578117907afd28937e1b5f)
-- 엔진: **Godot 4.7.2 stable**, 일반 GDScript 에디터 (x86_64, Compatibility 렌더러)
-- 공식 다운로드: https://godotengine.org/download/archive/4.7.2-stable/
-- 한글 폰트: [Noto Sans KR](https://github.com/google/fonts/tree/main/ofl/notosanskr), 동봉한 `assets/fonts/OFL.txt` 라이선스 적용
+게임 제작 이벤트용으로 제공된 겨울 포장마차 디자인을 적용했습니다. Windows 제출 패키지는 `dist/D002-Windows-Submission.zip`으로 생성하며, 빌드 파일은 Git에 포함하지 않습니다.
 
-## 로컬 실행
+- **기획 기준:** [Notion MVP 기획](https://app.notion.com/p/41387148aa578117907afd28937e1b5f) — 최신 고도화 규칙은 13절을 따릅니다.
+- **개발 환경:** Godot **4.7.2 stable** 일반 에디터 · GDScript · Windows x86_64
+- **화면:** 960×540 · Compatibility 렌더러
 
-Godot에서 저장소 루트의 `project.godot`를 열고 **F6**(현재 메인 씬) 또는 **F5**(프로젝트)를 누릅니다.
+## 플레이 방법
 
-이번 Windows 환경의 포터블 에디터 경로는 `C:\Users\kyj57\Documents\bungeoppang-tycoon\.tools\godot\Godot_v4.7.2-stable_win64.exe`입니다. `.tools`는 Git에 포함하지 않습니다. 다른 PC에서는 공식 에디터를 준비하고 아래 경로를 변경합니다.
+1. **일반 / 이지**를 선택합니다. 닉네임 없이 바로 시작할 수 있습니다.
+2. **게임 시작**을 누르면 조리 화면에 **3·2·1**이 표시됩니다. 준비 중에는 조작할 수 없으며, 준비가 끝난 뒤 90초가 시작됩니다.
+3. **양은주전자 → 틀**로 첫 반죽을 넣고, **주걱 → 틀**로 팥을 넣은 뒤, 다시 **양은주전자 → 틀**로 반죽을 추가합니다.
+4. 첫 면이 익으면 틀을 클릭해 뒤집고, 두 번째 면이 익으면 클릭해 봉투에 수거합니다.
+5. 봉투에 **3개**가 모이면 판매 영역으로 드래그합니다. 판매 금액과 손님 반응이 함께 표시되고 빈 봉투가 준비됩니다.
+6. 시간이 끝나면 결과 화면에서 **입력·변경 → OK → 적용 → 기록 저장**을 눌러 해당 난이도의 랭킹에 등록합니다. 자동 저장되지 않으며, 저장하지 않고 나가거나 다시 해도 됩니다. **다시 하기**는 난이도만 유지하고 닉네임과 저장 상태를 초기화합니다.
 
-저장소 루트에서 PowerShell로 실행:
+도구를 들고 있어도 뒤집기·수거가 가능합니다. 뒤집기·수거는 도구를 유지하고, 재료 투입에 성공했을 때만 도구가 자동 해제됩니다. 같은 도구를 다시 누르거나 우클릭해 해제할 수도 있습니다.
+
+봉투가 가득 차면 추가 수거가 차단됩니다. 판매 영역 밖 드롭, Esc, 우클릭, 창 포커스 이탈은 내용물을 유지한 채 드래그를 취소합니다. 시간 종료 시 틀과 미판매 봉투는 비워지며, 이미 판매한 금액만 정산합니다.
+
+### 조리 시간과 품질
+
+첫 면은 **첫 반죽을 넣은 순간**, 두 번째 면은 **뒤집은 순간**부터 실제 경과 시간으로 판정합니다. 후속 재료 투입 중에도 첫 면의 시간은 계속 흐릅니다.
+
+| 난이도 | 면 | 일반 | 완벽 | 탐 |
+| --- | --- | --- | --- | --- |
+| 일반 | 첫 면 | 5초 이상~7초 이하 | 7초 초과~9초 이하 | 9초 초과 |
+| 일반 | 두 번째 면 | 3초 이상~4.5초 이하 | 4.5초 초과~6초 이하 | 6초 초과 |
+| 이지 | 첫 면 | 5초 이상~8초 이하 | 8초 초과~12초 이하 | 12초 초과 |
+| 이지 | 두 번째 면 | 3초 이상~5초 이하 | 5초 초과~8초 이하 | 8초 초과 |
+
+첫 면 5초 전에는 뒤집을 수 없고, 두 번째 면 3초 전에는 수거할 수 없습니다. 양면 모두 완벽하면 **맛있는 붕어빵**, 탄 면 없이 한 면이라도 일반이면 **일반 붕어빵**, 어느 면이든 타면 **탄 붕어빵**입니다. 완성 후에도 수거 전까지 계속 조리되며, 탄 빵도 자동 폐기되지 않고 틀에 남습니다.
+
+두 난이도의 판매 가격은 같습니다. 3개 모두 맛있으면 **2,000원**, 모두 일반이면 **1,000원**, 모두 타면 **0원**입니다. 혼합 봉투의 가격은 `100 × floor((2000 × 맛있는 개수 + 1000 × 일반 개수) / 300)`이며, 0원 봉투도 정상 판매로 처리합니다.
+
+## 닉네임과 랭킹
+
+닉네임은 앞뒤 공백을 제거한 **1~12자**이며, 빈 값은 사용할 수 없습니다. 결과 화면의 Windows 입력은 **입력·변경 → 입력창 OK → 확인창 적용** 순서로 확정합니다. 취소하려면 입력창에서 OK를 누른 뒤 다음 확인창의 **취소** 또는 Esc/X를 사용합니다. 네이티브 입력창 자체는 Esc·Alt+F4·X로 닫기를 지원하지 않습니다. 이 입력 방식은 기존 Windows 한글 IME 검증 결과를 유지하기 위해 사용합니다.
+
+| 난이도 | 저장 파일 |
+| --- | --- |
+| 일반 | `user://rankings.json` |
+| 이지 | `user://rankings_easy.json` |
+
+- 난이도마다 **최고 판매 금액과 TOP 10**을 독립적으로 표시합니다. 시작 화면에서 난이도를 바꾸면 해당 랭킹을 조회할 수 있습니다.
+- 결과 화면의 **기록 저장**을 눌러 성공한 한 판당 한 번 저장합니다. 저장 전에는 기록이 생기지 않으며, 실패하면 이름과 결과를 유지한 채 다시 저장할 수 있습니다. 0원 기록과 같은 닉네임의 여러 플레이도 각각 별도 기록입니다.
+- 금액 내림차순으로 정렬하며, 동점이면 먼저 달성한 시각, 시각도 같으면 기록 순서가 우선입니다.
+- 파일이 없으면 빈 랭킹으로 시작합니다. 손상된 파일은 빈 랭킹으로 읽고 다음 정상 저장 시 복구합니다. 저장 실패 시 결과 화면에 실패를 안내하며 기존 정상 파일을 보호합니다.
+- 두 파일은 같은 버전 2 JSON 형식을 사용합니다. 기존 일반 원화 기록은 보존하며 다른 난이도로 복사하거나 혼합하지 않습니다.
+
+Windows 기본 저장 폴더는 `%APPDATA%\Godot\app_userdata\붕어빵 장인\`입니다. 인터넷이나 서버 없이 같은 PC의 로컬 기록을 사용합니다. 기존 60초·개발 테스트 기록의 일회 초기화는 최종 출시 준비 단계의 별도 작업이며, 현재 실행 시 초기화하지 않습니다. 단, 옛 버전 1의 **점수형 기록**은 기존 정책대로 원화 기록에 이월하지 않습니다.
+
+## 개발 환경 및 실행
+
+[Godot 4.7.2 stable](https://godotengine.org/download/archive/4.7.2-stable/)의 일반 Windows 에디터를 사용합니다. 저장소에 에디터와 Export Templates는 포함하지 않으므로 별도로 준비해야 합니다.
+
+에디터에서 저장소 루트의 `project.godot`를 열고 **F5**로 실행합니다. **F6**은 현재 열린 씬만 실행하므로, 메인 씬 `scenes/main.tscn`을 열었을 때 사용합니다.
+
+아래 PowerShell 명령은 **저장소 루트**에서 실행합니다. `$godot`은 자신의 콘솔 실행 파일 경로로 바꾸세요. 예시는 기존 포터블 구성의 상대 경로입니다.
 
 ```powershell
 $godot = '.\.tools\godot\Godot_v4.7.2-stable_win64_console.exe'
-& $godot --headless --path . --editor --import
+& $godot --headless --path . --editor --import --quit
 & $godot --path . --editor
-& $godot --path .
 ```
 
-## 핵심 플레이 및 테스트
+에디터 없이 프로젝트를 실행하려면 `& $godot --path .`를 사용합니다. `.tools/`, `.godot/`, `build/`, `dist/`는 Git에서 제외됩니다.
 
-양은주전자 선택 → 틀에 첫 반죽 → 주걱 선택 → 팥 → 주전자 선택 → 두 번째 반죽 → 재료 준비가 끝난 틀 클릭으로 뒤집습니다. 뒤집기는 도구 선택 여부와 관계없이 우선 시도하며, 성공·실패 시 선택한 도구를 유지합니다. 유효한 재료 투입은 도구를 자동 해제하며, 같은 도구 재클릭 또는 우클릭으로도 해제합니다. 잘못된 재료 입력은 도구 선택을 유지합니다.
+## 자동 검사
 
-일반 모드의 첫 면은 첫 반죽부터 5~7초 일반, 7초 초과~9초 완벽, 9초 초과 탐입니다. 두 번째 면은 뒤집은 시점부터 3~4.5초 일반, 4.5초 초과~6초 완벽, 6초 초과 탐입니다. 완성 후에도 계속 조리되며 탄 빵은 틀에 남습니다. 도구 선택 여부와 관계없이 완성·탄 빵을 클릭하면 품질을 보존해 봉투에 수거하며, 성공·실패 모두 선택 도구를 유지합니다. 봉투는 최대 3개이며, 가득 차면 먼저 판매해야 합니다. 3개 봉투를 판매 영역에 드롭하면 수익(원)을 합산하고 새 빈 봉투를 준비합니다. 탄 빵 3개의 0원 판매도 성공입니다. 영역 밖 드롭, Esc·우클릭·창 포커스 이탈은 내용물을 유지하고 드래그를 취소합니다. 90초 종료 시 틀·도구·미판매 봉투·드래그를 비우고, 다시 하기는 같은 닉네임으로 초기화합니다. 기존 F001 모델과 테스트는 별도로 유지합니다.
-
-시간 판정은 `Time.get_ticks_usec()`의 단조 증가 시각을 사용합니다. 로직 테스트는 같은 코드에 시각을 직접 전달하여 실제 대기 없이 경계값을 확인합니다.
+위 `$godot` 경로를 설정한 뒤 전체 검사를 실행합니다. 첫 실패나 엔진 오류가 발생하면 중단합니다.
 
 ```powershell
-& $godot --headless --path . --script res://tests/test_core.gd
-& $godot --headless --path . --script res://tests/test_ranking.gd
-& $godot --headless --path . --script res://tests/test_cooking.gd
-& $godot --headless --path . --script res://tests/test_cooking_ui.gd
-& $godot --headless --path . --script res://tests/test_sales.gd
-& $godot --headless --path . --script res://tests/test_sales_ui.gd
-& $godot --headless --path . --script res://tests/test_currency_ranking.gd
-& $godot --headless --path . --script res://tests/test_sales_feedback.gd
-& $godot --headless --path . --script res://tests/test_balance.gd
-& $godot --headless --path . --script res://tests/test_easy_mode.gd
-& $godot --headless --path . --script res://tests/test_difficulty_rankings.gd
+$tests = Get-ChildItem -Path .\tests\test_*.gd | Sort-Object Name
+foreach ($test in $tests) {
+    $output = & $godot --headless --path . --script "res://tests/$($test.Name)" 2>&1
+    $exitCode = $LASTEXITCODE
+    $output
+    if ($exitCode -ne 0 -or ($output -match 'ERROR:')) {
+        throw "검사 실패: $($test.Name)"
+    }
+}
 ```
 
-실패 시 종료 코드 1을 반환합니다. 테스트 스크립트는 Windows Export에서 제외합니다.
+조리 시간 경계, 도구·봉투·판매, 준비·종료·다시 하기, 닉네임, 난이도별 정렬·저장·복구·중복 방지를 검사합니다. 자동 검사는 두 랭킹 모두 `.tools/test-data/`의 격리된 경로를 사용하며 실제 사용자 랭킹을 변경하지 않습니다. 테스트 파일은 Windows Export에서 제외합니다.
 
-닉네임은 앞뒤 공백을 제거한 1~12자입니다. 일반은 `user://rankings.json`, 이지는 `user://rankings_easy.json`의 독립적인 버전 2 파일에 판매 금액(원)을 저장합니다(`score` 필드는 버전 2에서 원 단위). 버전 1 점수 기록은 최초 로드 시 빈 원화 랭킹으로 교체하며 이월하지 않습니다. 임시 파일 쓰기·검증 후 교체하므로 실패 시 기존 파일을 보존하고 실패를 안내합니다. 한 판 종료당 한 번만 저장하며, 0원과 동일 닉네임의 여러 판도 별도 기록입니다. 금액 내림차순, 동점은 플레이 시각·기록 순서로 정렬해 TOP 10을 유지합니다.
+## Windows Release Export
 
-Windows에서는 **입력·변경** 버튼으로 기본 입력창을 엽니다. 이 PC의 Godot 4.7.2 기본 LineEdit에서 재현된 한글 연속 조합 손실을 피하기 위해 엔진이 제공하는 Windows 네이티브 입력창을 사용합니다.
+에디터와 같은 **4.7.2 stable Export Templates**를 준비합니다. 에디터의 **Editor → Manage Export Templates**에서 설치할 수 있습니다. 기존 포터블 구성은 `_sc_` 파일과 `.tools/godot/editor_data/export_templates/4.7.2.stable/`을 사용합니다.
 
-입력창의 **OK**는 임시 입력만 마칩니다. 다음 확인창에서 **적용**을 눌러야 이름이 바뀌며, **취소**(또는 확인창의 Esc/X)는 기존 이름을 유지합니다. 이름이 없는 상태에서도 취소할 수 있습니다. 네이티브 입력창 자체는 Esc/Alt+F4/X를 지원하지 않아, 취소하려면 먼저 OK로 다음 확인창으로 이동해야 합니다.
-
-기존 Windows 기록 위치는 `%APPDATA%/Godot/app_userdata/붕어빵 장인/rankings.json`입니다. 같은 폴더의 `rankings_easy.json`은 이지 전용입니다. 기존 저장 모듈의 정렬·복구·중복 방지 검사는 유지하며, 자동 테스트는 두 파일 모두 `.tools/test-data/`의 별도 경로만 사용합니다.
-
-## 난이도 및 게임 시간
-
-시작과 다시 하기 모두 조리 화면에 **3·2·1**을 표시하며 준비 중에는 게임 입력이 차단됩니다. 준비가 끝난 시점부터 **90초**를 계산합니다. 시작 화면에서 일반·이지를 선택하며 판 시작 후에는 고정됩니다. 다시 하기는 같은 난이도를 유지하고, 시작 화면으로 돌아오면 변경할 수 있습니다.
-
-이지 모드는 첫 면 5~8초 일반, 8초 초과~12초 완벽, 12초 초과 탐이며 두 번째 면 3~5초 일반, 5초 초과~8초 완벽, 8초 초과 탐입니다. 재료·수거·판매 가격은 일반과 같습니다. **두 모드는 각각 독립적인 최고 판매 금액과 TOP 10을 표시·저장합니다.** 시작 화면에서 난이도를 바꾸면 해당 랭킹을 조회하며, 종료·다시 하기는 판 시작 때 고정한 난이도에만 저장합니다. 한쪽 파일 오류는 다른 쪽 랭킹에 영향을 주지 않습니다.
-
-기존 버전 2 원화 기록은 그대로 보존합니다. 기존 60초·개발 테스트 기록의 일회 초기화는 Notion에 따라 최종 출시 준비 단계에서 별도로 진행하며, 이번 변경에서는 삭제·초기화하지 않습니다.
-
-## Windows Export
-
-에디터와 동일한 **4.7.2 stable Export Templates**가 필요합니다. 일반 설치는 에디터의 **Editor > Manage Export Templates**에서 설치합니다. 이번 포터블 구성은 `_sc_` 파일로 자체 데이터 폴더를 사용하며, Windows x86_64 debug/release 템플릿은 `.tools/godot/editor_data/export_templates/4.7.2.stable/`에 준비되어 있습니다.
-
-**Project > Export > Windows Desktop > Export Project**에서 Release로 내보내거나, 저장소 루트에서 다음을 실행합니다.
+에디터의 **Project → Export → Windows Desktop → Export Project**에서 Release로 내보내거나, 다음 명령을 실행합니다.
 
 ```powershell
 $godot = '.\.tools\godot\Godot_v4.7.2-stable_win64_console.exe'
 New-Item -ItemType Directory -Force build/windows | Out-Null
-& $godot --headless --path . --editor --import
+& $godot --headless --path . --editor --import --quit
 & $godot --headless --path . --export-release 'Windows Desktop'
 & '.\build\windows\bungeoppang-tycoon.exe'
 ```
 
-`build/windows/bungeoppang-tycoon.exe`와 같은 이름의 `.pck`를 항상 함께 배포합니다. 폰트와 폰트 라이선스는 `.pck`에 포함됩니다. 캐시, 도구 및 빌드 결과는 Git에서 제외합니다.
+`build/windows/`의 **`bungeoppang-tycoon.exe`와 `bungeoppang-tycoon.pck`를 함께** 배포해야 합니다. 폰트와 폰트 라이선스는 `.pck`에 포함됩니다. 로컬 랭킹은 실행 파일 옆이 아닌 위 사용자 저장 폴더에 저장됩니다.
+
+## 폰트
+
+[Noto Sans KR](https://github.com/google/fonts/tree/main/ofl/notosanskr)을 사용합니다. 라이선스는 [assets/fonts/OFL.txt](assets/fonts/OFL.txt)를 확인하세요.
