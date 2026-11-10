@@ -12,6 +12,7 @@ var action := ""
 var action_serial := 0
 var previous_state := Mold.State.EMPTY
 var cooking := false
+var sparkling := false
 var phase := 0.0
 var progress := 0.0
 var seed := 0.0
@@ -41,10 +42,19 @@ static func browning_frame(state: int, elapsed: int, difficulty: int, first_qual
 		frame.color_to = Color("cc7926")
 	else:
 		frame.from = "grill_cooking"
-		frame.to = "grill_perfect_with_sparkles" if first_quality == Mold.SideQuality.PERFECT else "grill_normal"
+		frame.to = "grill_normal"
 	return frame
 
+static func should_sparkle(mold: RefCounted, now: int) -> bool:
+	if mold.state == Mold.State.SIDE_1:
+		return Mold.first_quality_at(mold.elapsed_at(now),mold.difficulty) == Mold.SideQuality.PERFECT
+	if mold.state in [Mold.State.SIDE_2,Mold.State.READY]:
+		return mold.first_quality == Mold.SideQuality.PERFECT and Mold.second_quality_at(mold.elapsed_at(now),mold.difficulty) == Mold.SideQuality.PERFECT
+	return false
+
 func update_browning(mold: RefCounted, now: int) -> void:
+	sparkling = cooking and should_sparkle(mold,now)
+	queue_redraw()
 	blend_frame = browning_frame(mold.state,mold.elapsed_at(now),mold.difficulty,mold.first_quality)
 	for name in [blend_frame.from,blend_frame.to]:
 		if not textures.has(name): textures[name] = load("res://assets/design/"+name+".png")
@@ -117,6 +127,7 @@ func _reset_motion() -> void:
 func clear() -> void:
 	_reset_motion()
 	cooking = false
+	sparkling = false
 	phase = seed
 	visible = false
 	set_process(false)
@@ -160,6 +171,18 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 func _draw() -> void:
+	# A separate layer stays bright instead of being darkened by bread shading.
+	if sparkling:
+		for i in 2:
+			var center := Vector2(32,25) if i == 0 else Vector2(177,91)
+			var radius := 8.0 + 2.0 * sin(phase * 4.0 + i * PI)
+			var star := PackedVector2Array()
+			for point in 8:
+				var angle := -PI/2.0 + point * PI/4.0
+				star.append(center + Vector2(cos(angle),sin(angle)) * (radius if point % 2 == 0 else radius * 0.28))
+			draw_colored_polygon(star,Color("fff1be"))
+			star.append(star[0])
+			draw_polyline(star,Color("bf843d"),1.3,true)
 	if cooking:
 		for i in 3:
 			var t := fposmod(phase * 0.7 + i / 3.0,1.0)

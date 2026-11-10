@@ -47,6 +47,21 @@ func run():
 			for state in [Mold.State.FILLING_ADDED,Mold.State.SIDE_1]:
 				var next := FX.browning_frame(state,elapsed,mode,Mold.SideQuality.COOKING)
 				check(batter.weight == next.weight and batter.scorch == next.scorch and batter.color_from == next.color_from and batter.color_to == next.color_to,"ingredient clicks preserve ongoing color progress")
+	for mode in [Mold.Difficulty.NORMAL,Mold.Difficulty.EASY]:
+		var mold := Mold.new(mode)
+		for first in [true,false]:
+			var limits := Mold.timing(first,mode)
+			for quality in [Mold.SideQuality.NORMAL,Mold.SideQuality.PERFECT]:
+				mold.first_quality = quality
+				mold.side_started_at = 0
+				for state in ([Mold.State.SIDE_1] if first else [Mold.State.SIDE_2,Mold.State.READY]):
+					mold.state = state
+					for elapsed in [0,limits[0],limits[1]-1,limits[1],limits[1]+1,limits[2]-1,limits[2],limits[2]+1]:
+						var expected: bool = elapsed > limits[1] and elapsed <= limits[2] and (first or quality == Mold.SideQuality.PERFECT)
+						check(FX.should_sparkle(mold,elapsed) == expected,"sparkles only at actual first-side perfect or delicious second-side quality")
+		for state in [Mold.State.EMPTY,Mold.State.FIRST_BATTER,Mold.State.FILLING_ADDED,Mold.State.BURNT]:
+			mold.state = state
+			check(not FX.should_sparkle(mold,8_500_000),"inactive/incomplete/burnt bread never sparkles")
 	var main = load("res://scenes/main.tscn").instantiate()
 	main.ranking_path = "res://.tools/test-data/blend-%d.json" % OS.get_process_id()
 	root.add_child(main)
@@ -67,10 +82,16 @@ func run():
 		check(fx.backing.material == null, "fixed empty mold is not tinted or blended")
 		if i > 0: check(fx.blend_material != main.final_design.cooking_effects[i-1].blend_material, "materials are not shared between molds")
 		check(main.session.molds[i].state == Mold.State.SIDE_1 and main.session.molds[i].side_started_at == now-i*500_000, "rendering never mutates cooking model")
+	for i in 6:
+		var mold = main.session.molds[i]
+		mold.side_started_at = now-8_000_000 if i % 2 == 0 else now-6_000_000
+	main._render(now)
+	for i in 6:
+		check(main.final_design.cooking_effects[i].sparkling == (i % 2 == 0),"actual UI independently shows perfect first-side sparkles")
 	main.session.advance(now+main.Session.DURATION_USEC)
 	main._render(now+main.Session.DURATION_USEC)
 	for fx in main.final_design.cooking_effects:
-		check(fx.blend_frame.from == "grill_empty" and fx.blend_frame.weight == 0 and not fx.visible, "end clears blend and steam")
+		check(fx.blend_frame.from == "grill_empty" and fx.blend_frame.weight == 0 and not fx.visible and not fx.sparkling, "end clears blend and steam")
 	main._start_round()
 	check(main.final_design.cooking_effects[0].blend_frame.from == "grill_empty", "retry starts with empty texture")
 	main.queue_free()
