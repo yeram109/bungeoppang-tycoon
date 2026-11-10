@@ -23,11 +23,11 @@ func run():
 						check(f.color_from.lerp(f.color_to,f.weight).is_equal_approx(expected), "first side uses original palette continuously")
 					check(f.weight >= 0.0 and f.weight <= 1.0, "blend bounded")
 					if elapsed < times[0]:
-						check(is_equal_approx(f.weight,float(elapsed)/times[0]), "raw to normal follows actual minimum time")
+						check(is_equal_approx(f.weight,clampf(float(elapsed)/(times[0]*0.65),0.0,1.0)), "raw to normal follows actual minimum time")
 					elif elapsed <= times[1]:
 						check(f.from == f.to and f.weight == 0, "normal region remains normal")
 					else:
-						check(is_equal_approx(f.weight,float(elapsed-times[1])/(times[2]-times[1])), "goldening follows mode perfect interval")
+						check(is_equal_approx(f.weight,pow(float(elapsed-times[1])/(times[2]-times[1]),0.55)), "goldening follows mode perfect interval")
 					if not first and quality == Mold.SideQuality.NORMAL:
 						check(not f.to.contains("perfect"), "normal first side cannot display delicious sparkle")
 				var at := FX.browning_frame(state,times[0],mode,quality)
@@ -35,9 +35,16 @@ func run():
 				check(before.to == at.from and before.weight > 0.999, "minimum color boundary continuous")
 				at = FX.browning_frame(state,times[1],mode,quality)
 				var after := FX.browning_frame(state,times[1]+1,mode,quality)
-				check(at.to == after.from and after.weight < 0.00001, "normal to perfect boundary continuous")
-				var burned := FX.browning_frame(Mold.State.BURNT,times[2]+1,mode,quality)
-				check(burned.from == "grill_burnt" and burned.to == "grill_burnt", "burned model is displayed immediately")
+				check(at.to == after.from and after.weight < 0.001, "normal to perfect boundary continuous")
+				var near_burn := FX.browning_frame(state,times[2]-1,mode,quality)
+				check(near_burn.scorch > 0.999, "color approaches charred before actual burn")
+				check(at.scorch == 0 and after.scorch < 0.001, "darkening starts continuously at final interval")
+				var burned := FX.browning_frame(Mold.State.BURNT,times[2]+1,mode,Mold.SideQuality.BURNT if first else quality)
+				check(burned.from == near_burn.from and burned.to == near_burn.to and absf(burned.weight-near_burn.weight)<0.001, "burn boundary keeps same textures and blend")
+				check(burned.scorch == 1.0, "burned appearance completes immediately without a texture swap")
+	for mode in [Mold.Difficulty.NORMAL,Mold.Difficulty.EASY]:
+		var burnt := FX.browning_frame(Mold.State.BURNT,Mold.timing(true,mode)[2]+1,mode,Mold.SideQuality.BURNT)
+		check(burnt.from == "grill_covered" and burnt.color_only and burnt.scorch == 1.0, "first face stays same shape and final color after burning")
 	var main = load("res://scenes/main.tscn").instantiate()
 	main.ranking_path = "res://.tools/test-data/blend-%d.json" % OS.get_process_id()
 	root.add_child(main)
@@ -54,7 +61,7 @@ func run():
 	main._render(now)
 	for i in 6:
 		var fx = main.final_design.cooking_effects[i]
-		check(is_equal_approx(fx.blend_material.get_shader_parameter("blend_amount"),i*0.1), "actual UI uses explicit render clock independently")
+		check(is_equal_approx(fx.blend_material.get_shader_parameter("blend_amount"),clampf(i*0.1/0.65,0.0,1.0)), "actual UI uses explicit render clock independently")
 		check(fx.backing.material == null, "fixed empty mold is not tinted or blended")
 		if i > 0: check(fx.blend_material != main.final_design.cooking_effects[i-1].blend_material, "materials are not shared between molds")
 		check(main.session.molds[i].state == Mold.State.SIDE_1 and main.session.molds[i].side_started_at == now-i*500_000, "rendering never mutates cooking model")

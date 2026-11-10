@@ -23,11 +23,14 @@ var textures: Dictionary = {}
 # raw -> normal and normal -> perfect use the mode's actual timing boundaries.
 static func browning_frame(state: int, elapsed: int, difficulty: int, first_quality: int) -> Dictionary:
 	var names := ["grill_empty", "grill_batter", "grill_filling", "grill_covered", "grill_cooking", "grill_normal", "grill_burnt"]
-	var first: String = names[state]
+	var burnt_first := state == Mold.State.BURNT and first_quality == Mold.SideQuality.BURNT
+	var visual_state := (Mold.State.SIDE_1 if burnt_first else Mold.State.SIDE_2) if state == Mold.State.BURNT else state
+	var scorch := 0.0
+	var first: String = names[visual_state]
 	var second := first
 	var weight := 0.0
-	if state in [Mold.State.SIDE_1, Mold.State.SIDE_2, Mold.State.READY]:
-		var side_one := state == Mold.State.SIDE_1
+	if visual_state in [Mold.State.SIDE_1, Mold.State.SIDE_2, Mold.State.READY]:
+		var side_one := visual_state == Mold.State.SIDE_1
 		var timing := Mold.timing(side_one, difficulty)
 		var raw := "grill_covered" if side_one else "grill_cooking"
 		var normal := "grill_flip_normal" if side_one else "grill_normal"
@@ -35,16 +38,18 @@ static func browning_frame(state: int, elapsed: int, difficulty: int, first_qual
 		if elapsed < timing[0]:
 			first = raw
 			second = normal
-			weight = clampf(float(elapsed) / timing[0],0.0,1.0)
+			weight = clampf(float(elapsed) / (timing[0] * 0.65),0.0,1.0)
 		elif elapsed <= timing[1]:
 			first = normal
 			second = normal
 		else:
 			first = normal
 			second = perfect
-			weight = clampf(float(elapsed-timing[1]) / (timing[2]-timing[1]),0.0,1.0)
-	var frame := {"from":first,"to":second,"weight":weight,"color_only":false}
-	if state == Mold.State.SIDE_1:
+			weight = pow(clampf(float(elapsed-timing[1]) / (timing[2]-timing[1]),0.0,1.0),0.55)
+		# Visual warning only: darken over the final perfect interval; no model writes.
+		scorch = smoothstep(float(timing[1]),float(timing[2]),float(elapsed))
+	var frame := {"from":first,"to":second,"weight":weight,"color_only":false,"scorch":scorch}
+	if visual_state == Mold.State.SIDE_1:
 		# Colors from the supplied covered/normal/perfect SVG palette.
 		var palette := {"grill_covered":Color("fff0d2"),"grill_flip_normal":Color("d5ac79"),"grill_flip_perfect":Color("cc7926")}
 		frame.color_only = true
@@ -62,6 +67,7 @@ func update_browning(mold: RefCounted, now: int) -> void:
 	blend_material.set_shader_parameter("next_texture",textures[blend_frame.to])
 	blend_material.set_shader_parameter("blend_amount",blend_frame.weight)
 	blend_material.set_shader_parameter("color_only",blend_frame.color_only)
+	blend_material.set_shader_parameter("scorch",blend_frame.scorch)
 	if blend_frame.color_only:
 		blend_material.set_shader_parameter("color_from",blend_frame.color_from)
 		blend_material.set_shader_parameter("color_to",blend_frame.color_to)

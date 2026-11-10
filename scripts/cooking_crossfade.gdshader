@@ -4,6 +4,7 @@ uniform float blend_amount : hint_range(0.0, 1.0) = 0.0;
 // First-side sprites have different silhouettes. Recolor one fixed source
 // instead of crossfading their edges; keep its alpha and outline unchanged.
 uniform bool color_only = false;
+uniform float scorch : hint_range(0.0, 1.0) = 0.0;
 uniform vec4 raw_color : source_color = vec4(1.0, 0.941176, 0.823529, 1.0);
 uniform vec4 color_from : source_color = vec4(1.0);
 uniform vec4 color_to : source_color = vec4(1.0);
@@ -21,4 +22,8 @@ void fragment() {
 	} else {
 		COLOR = vec4(premultiplied / max(alpha, 0.00001), alpha) * tint;
 	}
+	// Approach dark brown gradually, preserving alpha and detail.
+	float bread_mask = color_only ? smoothstep(0.62, 0.80, min(first.r, first.g)) : smoothstep(0.25, 0.50, max(first.r, first.g));
+	vec3 charred = COLOR.rgb * vec3(0.28, 0.22, 0.20);
+	COLOR.rgb = mix(COLOR.rgb, charred, scorch * bread_mask);
 }
