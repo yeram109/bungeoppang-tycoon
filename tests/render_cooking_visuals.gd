@@ -33,7 +33,7 @@ func run():
 		mold.side_started_at = 0
 		var times := Mold.timing(true,mode)
 		var baseline: Image
-		for elapsed in [0,times[0]/2,times[0],times[1],(times[1]+times[2])/2,times[2],times[2]+1]:
+		for elapsed in [0,times[0]/2,times[0],times[1],(times[1]+times[2])/2,times[2],times[2]+1,times[2]+125_000,times[2]+250_000]:
 			mold.advance(int(elapsed))
 			fx.update_browning(mold,int(elapsed))
 			await process_frame

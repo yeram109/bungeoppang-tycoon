@@ -19,7 +19,7 @@ func run():
 					var f := FX.browning_frame(state,int(elapsed),mode,quality)
 					var progress: float = float(elapsed)/times[2]
 					check(is_equal_approx(f.weight,progress),"color progresses across entire cooking duration")
-					check(is_equal_approx(f.scorch,progress*progress*progress),"darkening is gradual from start")
+					check(f.scorch == 0.0,"edible bread never darkens, even throughout perfect interval")
 					if first:
 						check(f.color_only and f.from == "grill_covered" and f.to == "grill_covered","first-side silhouette fixed")
 					else:
@@ -33,12 +33,18 @@ func run():
 				var near_burn := FX.browning_frame(state,times[2]-1,mode,quality)
 				var burned := FX.browning_frame(Mold.State.BURNT,times[2]+1,mode,Mold.SideQuality.BURNT if first else quality)
 				check(burned.from == near_burn.from and burned.to == near_burn.to and absf(burned.weight-near_burn.weight)<0.001,"burning never swaps artwork")
-				check(burned.scorch == 1.0,"burn color finishes at original deadline")
+				check(burned.scorch < 0.00001,"burn starts visually continuous after actual deadline")
+				for offset in [0,1,125_000,249_999,250_000,500_000]:
+					var burnt_quality: int = Mold.SideQuality.BURNT if first else quality
+					var faded := FX.browning_frame(Mold.State.BURNT,times[2]+offset,mode,burnt_quality)
+					var expected := 0.0 if offset == 0 else (0.5 if offset == 125_000 else (1.0 if offset >= 250_000 else -1.0))
+					check(faded.scorch >= 0 and faded.scorch <= 1,"burn fade bounded")
+					if expected >= 0: check(is_equal_approx(faded.scorch,expected),"burn fade completes in 250ms without delaying model")
 				var previous := FX.browning_frame(state,0,mode,quality)
 				for elapsed in range(100_000,times[2]+1,100_000):
 					var current := FX.browning_frame(state,elapsed,mode,quality)
 					check(current.weight > previous.weight and current.weight-previous.weight < 0.017,"no pauses or accelerated color bursts in 100ms steps")
-					check(current.scorch >= previous.scorch and current.scorch-previous.scorch < 0.05,"darkening has bounded frame-to-frame change")
+					check(current.scorch == 0.0,"cooking remains golden until burnt")
 					previous = current
 		# Batter already cooks while ingredients are being added. Keep the same
 		# color progress when filling and covering so the third click cannot jump.
@@ -88,6 +94,12 @@ func run():
 	main._render(now)
 	for i in 6:
 		check(main.final_design.cooking_effects[i].sparkling == (i % 2 == 0),"actual UI independently shows perfect first-side sparkles")
+	main.session.advance(now+1_000_001)
+	main._render(now+1_000_001)
+	check(main.session.molds[0].state == Mold.State.BURNT and main.final_design.cooking_effects[0].blend_frame.scorch < 0.001,"model burns immediately while visual fade starts")
+	check(not main.final_design.cooking_effects[0].sparkling,"sparkles stop immediately upon burning")
+	main.click_mold_at(0,now+1_000_002)
+	check(main.session.bag.items.size() == 1 and main.session.bag.items[0] == Mold.Quality.BURNT,"burnt bread can be collected during fade without delaying input")
 	main.session.advance(now+main.Session.DURATION_USEC)
 	main._render(now+main.Session.DURATION_USEC)
 	for fx in main.final_design.cooking_effects:

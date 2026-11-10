@@ -4,6 +4,7 @@ const Mold = preload("res://scripts/cooking_mold.gd")
 const POUR := "pour"
 const FILL := "fill"
 const FLIP := "flip"
+const BURN_FADE_USEC := 250_000
 var artwork: TextureRect
 var utensil: TextureRect
 var backing: TextureRect
@@ -33,9 +34,10 @@ static func browning_frame(state: int, elapsed: int, difficulty: int, first_qual
 	var duration: int = Mold.timing(side_one,difficulty)[2]
 	var progress := clampf(float(elapsed)/duration,0.0,1.0)
 	frame.weight = progress
-	# Darkening builds gradually from the beginning rather than starting suddenly
-	# at the perfect boundary. Its gentle initial slope keeps fresh batter pale.
-	frame.scorch = progress * progress * progress
+	# Keep edible bread golden. Only the actual BURNT state starts a brief
+	# visual fade; gameplay has already committed the burn and remains interactive.
+	if state == Mold.State.BURNT:
+		frame.scorch = smoothstep(0.0,float(BURN_FADE_USEC),float(maxi(0,elapsed-duration)))
 	if side_one:
 		frame.color_only = true
 		frame.color_from = Color("fff0d2")
@@ -173,14 +175,18 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	# A separate layer stays bright instead of being darkened by bread shading.
 	if sparkling:
-		for i in 2:
-			var center := Vector2(32,25) if i == 0 else Vector2(177,91)
-			var radius := 8.0 + 2.0 * sin(phase * 4.0 + i * PI)
+		for i in 3:
+			var center: Vector2 = [Vector2(35,29),Vector2(174,87),Vector2(126,28)][i]
+			var radius := 13.0 + 3.0 * sin(phase * 4.5 + i * TAU / 3.0)
 			var star := PackedVector2Array()
 			for point in 8:
 				var angle := -PI/2.0 + point * PI/4.0
 				star.append(center + Vector2(cos(angle),sin(angle)) * (radius if point % 2 == 0 else radius * 0.28))
-			draw_colored_polygon(star,Color("fff1be"))
+			var glow := PackedVector2Array()
+			for point in star: glow.append(center + (point-center)*1.45)
+			draw_colored_polygon(glow,Color(1.0,0.8,0.3,0.23))
+			draw_colored_polygon(star,Color("fff8d9"))
+			draw_circle(center,2.5,Color.WHITE)
 			star.append(star[0])
 			draw_polyline(star,Color("bf843d"),1.3,true)
 	if cooking:

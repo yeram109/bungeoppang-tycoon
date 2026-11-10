@@ -24,6 +24,6 @@ void fragment() {
 	}
 	// Approach dark brown gradually, preserving alpha and detail.
 	float bread_mask = color_only ? smoothstep(0.62, 0.80, min(first.r, first.g)) : smoothstep(0.25, 0.50, max(first.r, first.g));
-	vec3 charred = COLOR.rgb * vec3(0.42, 0.34, 0.30);
+	vec3 charred = COLOR.rgb * vec3(0.24, 0.20, 0.18);
 	COLOR.rgb = mix(COLOR.rgb, charred, scorch * bread_mask);
 }
