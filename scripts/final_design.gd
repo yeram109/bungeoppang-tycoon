@@ -13,6 +13,7 @@ var mode_label: Label
 var decoration: TextureRect
 var divider: Label
 var mold_art: Array[TextureRect] = []
+var cooking_effects: Array[Control] = []
 var mold_status: Array[Label] = []
 var bag_art: Control
 var breads: Array[TextureRect] = []
@@ -132,6 +133,10 @@ func setup(main) -> void:
 		button_style(view.cook_button,false,true)
 		for key in ["font_color","font_hover_color","font_pressed_color","font_disabled_color","font_focus_color"]: view.cook_button.add_theme_color_override(key,Color.TRANSPARENT)
 		mold_art.append(art(view.cook_button,"grill_empty",Rect2(0,0,209,125)))
+		var effect = preload("res://scripts/cooking_effects.gd").new()
+		view.cook_button.add_child(effect)
+		effect.setup(mold_art[-1], i)
+		cooking_effects.append(effect)
 		var status := label(canvas,"",12,PAPER)
 		status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		place(status,Rect2(0,125,209,20))
@@ -268,6 +273,7 @@ func render(main) -> void:
 			elif view.cook_button.text.contains("일반"): name = "grill_flip_normal"
 		if mold.state == main.Mold.State.READY and mold.quality == main.Mold.Quality.DELICIOUS: name = "grill_perfect_with_sparkles"
 		mold_art[i].texture = texture(name)
+		cooking_effects[i].sync(mold.state, main.session.running)
 		view.cook_button.tooltip_text = ""
 		view.progress.hide()
 		mold_status[i].hide()
