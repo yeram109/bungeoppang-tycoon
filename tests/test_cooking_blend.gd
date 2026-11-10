@@ -17,6 +17,10 @@ func run():
 			for quality in [Mold.SideQuality.NORMAL,Mold.SideQuality.PERFECT]:
 				for elapsed in [0, times[0]/2, times[0]-1,times[0],times[0]+1,times[1]-1,times[1],times[1]+1,(times[1]+times[2])/2,times[2]-1,times[2]]:
 					var f := FX.browning_frame(state,int(elapsed),mode,quality)
+					if first:
+						check(f.color_only and f.from == "grill_covered" and f.to == "grill_covered", "first side preserves one silhouette throughout cooking")
+						var expected := Color("fff0d2").lerp(Color("d5ac79"),f.weight) if elapsed < times[0] else Color("d5ac79").lerp(Color("cc7926"),f.weight)
+						check(f.color_from.lerp(f.color_to,f.weight).is_equal_approx(expected), "first side uses original palette continuously")
 					check(f.weight >= 0.0 and f.weight <= 1.0, "blend bounded")
 					if elapsed < times[0]:
 						check(is_equal_approx(f.weight,float(elapsed)/times[0]), "raw to normal follows actual minimum time")

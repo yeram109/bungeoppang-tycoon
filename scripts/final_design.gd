@@ -27,6 +27,7 @@ var cursor_art: TextureRect
 var drag_art: Control
 var clock_art: TextureRect
 var coin_art: TextureRect
+var sales_bubble: TextureRect
 var sale_style := StyleBoxTexture.new()
 func texture(name: String) -> Texture2D:
 	if not backgrounds.has(name): backgrounds[name] = load(BASE + name + ".png")
@@ -161,9 +162,8 @@ func setup(main) -> void:
 		bread.rotation = PI / 2
 		breads.append(bread)
 	art(bag_art,"bag_front",Rect2(0,0,184,174))
-	var bubble := StyleBoxTexture.new()
-	bubble.texture = texture("sale_bubble")
-	main.sales_feedback.add_theme_stylebox_override("normal",bubble)
+	sales_bubble = art(main.sales_feedback,"sale_bubble",Rect2(-10,-24,260,96))
+	sales_bubble.show_behind_parent = true
 	main.sales_feedback.add_theme_color_override("font_color",INK)
 	main.sales_feedback.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	main.sales_feedback.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -248,7 +248,7 @@ func render(main, now: int = -1) -> void:
 	main.sale_zone.add_theme_stylebox_override("panel",sale_style)
 	main.sale_zone.get_child(0).hide()
 	main.sale_zone.tooltip_text = ""
-	place(main.sales_feedback,Rect2(40,29,260,96))
+	place(main.sales_feedback,Rect2(50,53,240,65))
 	place(main.bag_hint,Rect2(40,130,580,40))
 	main.status_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	main.revenue_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS

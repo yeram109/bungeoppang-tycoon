@@ -53,6 +53,10 @@ func run() -> void:
 		check(not main.bag_hint.visible, "feedback replaces hint without overlapping")
 		await process_frame
 		check(main.get_global_rect().encloses(main.sales_feedback.get_global_rect()) and main.get_global_rect().encloses(main.sale_zone.get_global_rect()), "popup and sale zone fit viewport")
+		var bubble: Rect2 = main.final_design.sales_bubble.get_global_rect()
+		check(bubble == Rect2(40,29,260,96), "bubble artwork retains design placement")
+		check(main.sales_feedback.get_global_rect() == Rect2(bubble.position+Vector2(10,24),Vector2(240,65)), "text centered in bubble body excluding tail")
+		check(main.sales_feedback.get_minimum_size().y <= 65 and main.final_design.sales_bubble.mouse_filter == Control.MOUSE_FILTER_IGNORE, "all reaction lines fit without intercepting input")
 		main._render(2_299_999)
 		check(main.sales_feedback.visible, "visible just before 1.3 seconds")
 		main._render(2_300_000)

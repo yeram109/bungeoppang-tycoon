@@ -43,7 +43,16 @@ static func browning_frame(state: int, elapsed: int, difficulty: int, first_qual
 			first = normal
 			second = perfect
 			weight = clampf(float(elapsed-timing[1]) / (timing[2]-timing[1]),0.0,1.0)
-	return {"from":first,"to":second,"weight":weight}
+	var frame := {"from":first,"to":second,"weight":weight,"color_only":false}
+	if state == Mold.State.SIDE_1:
+		# Colors from the supplied covered/normal/perfect SVG palette.
+		var palette := {"grill_covered":Color("fff0d2"),"grill_flip_normal":Color("d5ac79"),"grill_flip_perfect":Color("cc7926")}
+		frame.color_only = true
+		frame.color_from = palette[first]
+		frame.color_to = palette[second]
+		frame.from = "grill_covered"
+		frame.to = "grill_covered"
+	return frame
 
 func update_browning(mold: RefCounted, now: int) -> void:
 	blend_frame = browning_frame(mold.state,mold.elapsed_at(now),mold.difficulty,mold.first_quality)
@@ -52,6 +61,10 @@ func update_browning(mold: RefCounted, now: int) -> void:
 	artwork.texture = textures[blend_frame.from]
 	blend_material.set_shader_parameter("next_texture",textures[blend_frame.to])
 	blend_material.set_shader_parameter("blend_amount",blend_frame.weight)
+	blend_material.set_shader_parameter("color_only",blend_frame.color_only)
+	if blend_frame.color_only:
+		blend_material.set_shader_parameter("color_from",blend_frame.color_from)
+		blend_material.set_shader_parameter("color_to",blend_frame.color_to)
 
 
 func setup(image: TextureRect, index: int) -> void:
