@@ -19,44 +19,29 @@ var blend_material: ShaderMaterial
 var blend_frame: Dictionary = {}
 var textures: Dictionary = {}
 
-# The mixer only reads model time. Hard ingredient/side changes stay immediate;
-# raw -> normal and normal -> perfect use the mode's actual timing boundaries.
+# Presentation uses the full side duration, not quality boundaries. A single
+# continuous ramp avoids fast starts, held colors and sudden late darkening.
 static func browning_frame(state: int, elapsed: int, difficulty: int, first_quality: int) -> Dictionary:
 	var names := ["grill_empty", "grill_batter", "grill_filling", "grill_covered", "grill_cooking", "grill_normal", "grill_burnt"]
 	var burnt_first := state == Mold.State.BURNT and first_quality == Mold.SideQuality.BURNT
 	var visual_state := (Mold.State.SIDE_1 if burnt_first else Mold.State.SIDE_2) if state == Mold.State.BURNT else state
-	var scorch := 0.0
-	var first: String = names[visual_state]
-	var second := first
-	var weight := 0.0
-	if visual_state in [Mold.State.SIDE_1, Mold.State.SIDE_2, Mold.State.READY]:
-		var side_one := visual_state == Mold.State.SIDE_1
-		var timing := Mold.timing(side_one, difficulty)
-		var raw := "grill_covered" if side_one else "grill_cooking"
-		var normal := "grill_flip_normal" if side_one else "grill_normal"
-		var perfect := "grill_flip_perfect" if side_one else ("grill_perfect_with_sparkles" if first_quality == Mold.SideQuality.PERFECT else normal)
-		if elapsed < timing[0]:
-			first = raw
-			second = normal
-			weight = clampf(float(elapsed) / (timing[0] * 0.65),0.0,1.0)
-		elif elapsed <= timing[1]:
-			first = normal
-			second = normal
-		else:
-			first = normal
-			second = perfect
-			weight = pow(clampf(float(elapsed-timing[1]) / (timing[2]-timing[1]),0.0,1.0),0.55)
-		# Visual warning only: darken over the final perfect interval; no model writes.
-		scorch = smoothstep(float(timing[1]),float(timing[2]),float(elapsed))
-	var frame := {"from":first,"to":second,"weight":weight,"color_only":false,"scorch":scorch}
-	if visual_state == Mold.State.SIDE_1:
-		# Colors from the supplied covered/normal/perfect SVG palette.
-		var palette := {"grill_covered":Color("fff0d2"),"grill_flip_normal":Color("d5ac79"),"grill_flip_perfect":Color("cc7926")}
+	var frame := {"from":names[visual_state],"to":names[visual_state],"weight":0.0,"color_only":false,"scorch":0.0}
+	if visual_state == Mold.State.EMPTY:
+		return frame
+	var side_one := visual_state in [Mold.State.FIRST_BATTER,Mold.State.FILLING_ADDED,Mold.State.SIDE_1]
+	var duration: int = Mold.timing(side_one,difficulty)[2]
+	var progress := clampf(float(elapsed)/duration,0.0,1.0)
+	frame.weight = progress
+	# Darkening builds gradually from the beginning rather than starting suddenly
+	# at the perfect boundary. Its gentle initial slope keeps fresh batter pale.
+	frame.scorch = progress * progress * progress
+	if side_one:
 		frame.color_only = true
-		frame.color_from = palette[first]
-		frame.color_to = palette[second]
-		frame.from = "grill_covered"
-		frame.to = "grill_covered"
+		frame.color_from = Color("fff0d2")
+		frame.color_to = Color("cc7926")
+	else:
+		frame.from = "grill_cooking"
+		frame.to = "grill_perfect_with_sparkles" if first_quality == Mold.SideQuality.PERFECT else "grill_normal"
 	return frame
 
 func update_browning(mold: RefCounted, now: int) -> void:
