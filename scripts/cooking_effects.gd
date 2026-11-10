@@ -41,7 +41,7 @@ static func browning_frame(state: int, elapsed: int, difficulty: int, first_qual
 	if side_one:
 		frame.color_only = true
 		frame.color_from = Color("fff0d2")
-		frame.color_to = Color("cc7926")
+		frame.color_to = Color("d5ac79") # Match the second-side bread palette.
 	else:
 		frame.from = "grill_cooking"
 		frame.to = "grill_normal"
