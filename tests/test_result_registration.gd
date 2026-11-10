@@ -25,6 +25,8 @@ func run() -> void:
 	root.add_child(main)
 	main.set_process(false)
 	for mode in [0, 1]:
+		main.final_design.modes[1 - mode].pressed.emit()
+		check(main.difficulty_select.get_selected_id() == mode and main.ranking == (main.normal_ranking if mode == 0 else main.easy_ranking), "visible difficulty button routes selection and ranking")
 		main.difficulty_select.select(mode)
 		main.difficulty_select.item_selected.emit(mode)
 		var store = main.ranking

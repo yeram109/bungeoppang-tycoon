@@ -86,7 +86,7 @@ func run() -> void:
 		main.begin_bag_drag(10_000_000)
 		main.drop_bag_at(inside, 10_000_000)
 		var expected: int = {Mold.Quality.DELICIOUS: 2000, Mold.Quality.NORMAL: 1000, Mold.Quality.BURNT: 0}[quality]
-		check(main.session.revenue == expected and main.revenue_label.text == "수익 %d원" % expected, "sale updates revenue label")
+		check(main.session.revenue == expected and main.revenue_label.text.replace(",", "") == "%d원" % expected, "sale updates revenue label")
 	# Collection refreshes READY quality at the actual click, not the last frame.
 	for elapsed in [4_500_000, 4_500_001, 6_000_000, 6_000_001]:
 		main.session.start(0)
