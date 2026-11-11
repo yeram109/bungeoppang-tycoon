@@ -13,6 +13,7 @@ var mode_label: Label
 var decoration: TextureRect
 var divider: Label
 var mold_art: Array[TextureRect] = []
+var cooking_effects: Array[Control] = []
 var mold_status: Array[Label] = []
 var bag_art: Control
 var breads: Array[TextureRect] = []
@@ -26,6 +27,7 @@ var cursor_art: TextureRect
 var drag_art: Control
 var clock_art: TextureRect
 var coin_art: TextureRect
+var sales_bubble: TextureRect
 var sale_style := StyleBoxTexture.new()
 func texture(name: String) -> Texture2D:
 	if not backgrounds.has(name): backgrounds[name] = load(BASE + name + ".png")
@@ -132,6 +134,10 @@ func setup(main) -> void:
 		button_style(view.cook_button,false,true)
 		for key in ["font_color","font_hover_color","font_pressed_color","font_disabled_color","font_focus_color"]: view.cook_button.add_theme_color_override(key,Color.TRANSPARENT)
 		mold_art.append(art(view.cook_button,"grill_empty",Rect2(0,0,209,125)))
+		var effect = preload("res://scripts/cooking_effects.gd").new()
+		view.cook_button.add_child(effect)
+		effect.setup(mold_art[-1], i)
+		cooking_effects.append(effect)
 		var status := label(canvas,"",12,PAPER)
 		status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		place(status,Rect2(0,125,209,20))
@@ -156,9 +162,8 @@ func setup(main) -> void:
 		bread.rotation = PI / 2
 		breads.append(bread)
 	art(bag_art,"bag_front",Rect2(0,0,184,174))
-	var bubble := StyleBoxTexture.new()
-	bubble.texture = texture("sale_bubble")
-	main.sales_feedback.add_theme_stylebox_override("normal",bubble)
+	sales_bubble = art(main.sales_feedback,"sale_bubble",Rect2(-10,-24,260,96))
+	sales_bubble.show_behind_parent = true
 	main.sales_feedback.add_theme_color_override("font_color",INK)
 	main.sales_feedback.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	main.sales_feedback.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -200,7 +205,8 @@ func money(value: int) -> String:
 		number = number.insert(index,",")
 		index -= 3
 	return number + "원"
-func render(main) -> void:
+func render(main, now: int = -1) -> void:
+	if now < 0: now = Time.get_ticks_usec()
 	var play: bool = main.session.running or main.session.preparing
 	var ended: bool = main.has_started and not play
 	background.texture = texture("play_base" if play else ("result_base" if ended else "start_base"))
@@ -242,7 +248,7 @@ func render(main) -> void:
 	main.sale_zone.add_theme_stylebox_override("panel",sale_style)
 	main.sale_zone.get_child(0).hide()
 	main.sale_zone.tooltip_text = ""
-	place(main.sales_feedback,Rect2(40,29,260,96))
+	place(main.sales_feedback,Rect2(50,53,240,65))
 	place(main.bag_hint,Rect2(40,130,580,40))
 	main.status_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	main.revenue_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -262,12 +268,8 @@ func render(main) -> void:
 	for i in main.mold_views.size():
 		var view = main.mold_views[i]
 		var mold = main.session.molds[i]
-		var name: String = ["grill_empty","grill_batter","grill_filling","grill_covered","grill_cooking","grill_normal","grill_burnt"][mold.state]
-		if mold.state == main.Mold.State.SIDE_1:
-			if view.cook_button.text.contains("완벽"): name = "grill_flip_perfect"
-			elif view.cook_button.text.contains("일반"): name = "grill_flip_normal"
-		if mold.state == main.Mold.State.READY and mold.quality == main.Mold.Quality.DELICIOUS: name = "grill_perfect_with_sparkles"
-		mold_art[i].texture = texture(name)
+		cooking_effects[i].sync(mold.state, main.session.running)
+		cooking_effects[i].update_browning(mold, mini(now, main.session.started_at + main.Session.DURATION_USEC))
 		view.cook_button.tooltip_text = ""
 		view.progress.hide()
 		mold_status[i].hide()
